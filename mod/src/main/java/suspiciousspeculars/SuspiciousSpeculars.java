@@ -515,6 +515,7 @@ public final class SuspiciousSpeculars {
             cmd.add("--wait");
             cmd.add("60");
             cmd.add("--window");
+            cmd.add("--hand-back");
 
             log.info("handing over to the launcher: " + cmd);
             Process process = new ProcessBuilder(cmd).redirectErrorStream(true)
@@ -581,6 +582,7 @@ public final class SuspiciousSpeculars {
             // the window is the point: it shows progress, then what was fetched, then waits for
             // Continue before relaunching the instance
             cmd.add("--window");
+            cmd.add("--hand-back");
             new ProcessBuilder(cmd).redirectErrorStream(true)
                     .redirectOutput(ProcessBuilder.Redirect.appendTo(
                             gameDir.resolve("logs").resolve("suspicious-speculars-launcher.log").toFile()))

@@ -202,6 +202,9 @@ public final class SuspiciousCorePlugin implements IFMLLoadingPlugin {
             cmd.add("--wait");
             cmd.add("60");
             cmd.add("--window");
+            // the launch this handed over is already halted: give it back even when the run finds
+            // nothing to change
+            cmd.add("--hand-back");
 
             log.info("handing over to the launcher: " + cmd);
             Process process = new ProcessBuilder(cmd).redirectErrorStream(true)

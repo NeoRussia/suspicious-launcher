@@ -343,6 +343,19 @@ if (Test-Path $launcherJar) {
     Check "a current state says Reinstall" ($labels[1] -eq "Reinstall") (($labels -join " / "))
     Check "a newer pack release says Update" ($labels[2] -eq "Update") (($labels -join " / "))
     Check "an up-to-date release says Reinstall" ($labels[3] -eq "Reinstall") (($labels -join " / "))
+
+    # 19. the window must give back the launch it took, even when the run changed nothing
+    $handBackOut = Join-Path $Work "handbackprobe"
+    Remove-Item $handBackOut -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Force -Path $handBackOut | Out-Null
+    & $javac -cp $launcherJar -d $handBackOut (Join-Path $Root "test\HandBackProbe.java") 2>&1 | Out-Null
+    $hb = & $java -cp "$launcherJar;$handBackOut" suspiciousspeculars.launcher.HandBackProbe 2>&1
+    Check "a changed run hands the launch back" ($hb[0] -eq "true") (($hb -join " / "))
+    Check "a no-op run spawned by the mod hands it back" ($hb[1] -eq "true") (($hb -join " / "))
+    Check "a no-op run opened by hand does not" ($hb[2] -eq "false") (($hb -join " / "))
+    Check "a dry run never relaunches" ($hb[3] -eq "false") (($hb -join " / "))
+    Check "a patch-only run never relaunches" ($hb[4] -eq "false") (($hb -join " / "))
+    Check "no launcher, no relaunch attempt" ($hb[5] -eq "false") (($hb -join " / "))
 } else {
     "  SKIP  window button labels (no launcher jar)"
 }

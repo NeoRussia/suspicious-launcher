@@ -43,6 +43,8 @@ import java.util.Properties;
  *   --scale <n>     integer GUI scale (default 1: one unit is one pixel of patcher.gif)
  *   --dry-run       report what would happen; write nothing, launch nothing
  *   --patch-only    patch but never relaunch (the mod's fallback when a relaunch already failed)
+ *   --hand-back     the window was spawned by the mod, so the launch it halted must come back even
+ *                   when the run found nothing to change
  *   --data <dir>    patch data; default is a "patch" folder beside this jar
  *   --prism <file>  explicit launcher binary, overriding detection
  *   --list          find launchers and instances, print them, do nothing else
@@ -114,6 +116,7 @@ public final class Launcher {
         String hint = null;
         String errors = null;
         int waitSeconds = 0;
+        boolean handBack = false;
 
         for (int i = 0; i < args.length; i++) {
             String a = args[i];
@@ -123,6 +126,7 @@ public final class Launcher {
             else if (a.equals("--prism") && i + 1 < args.length) forced = args[++i];
             else if (a.equals("--dry-run")) dry = true;
             else if (a.equals("--patch-only")) patchOnly = true;
+            else if (a.equals("--hand-back")) handBack = true;
             else if (a.equals("--window")) window = true;
             else if (a.equals("--scale") && i + 1 < args.length) {
                 guiScale = parseScale(args[++i], 1);
@@ -193,7 +197,7 @@ public final class Launcher {
             // the window this replaced, and only an explicit --scale should ask for it
             if (!scaleGiven) guiScale = 1;
             openWindow(gameDir.toAbsolutePath(), instance.toAbsolutePath(),
-                    dataDir.toAbsolutePath(), guiScale, waitSeconds, forced, dry, patchOnly);
+                    dataDir.toAbsolutePath(), guiScale, waitSeconds, forced, dry, patchOnly, handBack);
             return;
         }
 
@@ -478,7 +482,7 @@ public final class Launcher {
      */
     static void openWindow(final Path gameDir, final Path instanceDir, final Path dataDir,
                            final int scale, final int waitSeconds, final String forcedLauncher,
-                           final boolean dryRun, final boolean patchOnly) {
+                           final boolean dryRun, final boolean patchOnly, final boolean handBack) {
         if (GraphicsEnvironment.isHeadless()) {
             System.err.println("no display: use --preview <png> to render the window instead");
             return;
@@ -523,7 +527,7 @@ public final class Launcher {
                     if (panel.isComplete()) {
                         // Continue is the hand-off: relaunch the instance the way the CLI path does,
                         // then exit so the process that spawned us can let go.
-                        handOff(game, gameDir, changed[0], dryRun, patchOnly);
+                        handOff(game, gameDir, changed[0], dryRun, patchOnly, handBack);
                         frame.dispose();
                         System.exit(0);
                     } else if (!panel.isBusy()) {
@@ -562,20 +566,23 @@ public final class Launcher {
     }
 
     /**
-     * Starts the instance again, the way the CLI path does after a run. Only when something actually
-     * changed, and never in a dry run or a patch-only run - those exist to leave the game alone.
+     * Starts the instance again, the way the CLI path does after a run.
+     *
+     * <p>Only when something actually changed, unless the window was opened by the mod: the mod hands
+     * over a launch it has already halted, so the launch must come back even when the run found
+     * nothing to do - an update whose packs were already the advertised bytes used to end with
+     * "nothing changed, not relaunching" and leave the player outside the game. Never in a dry run or
+     * a patch-only run, and never without a launcher to start.</p>
      */
-    static void handOff(Game game, Path gameDir, boolean changed, boolean dryRun, boolean patchOnly) {
-        if (dryRun || patchOnly) {
-            System.out.println("hand-off:  skipped (dry run or patch only)");
-            return;
-        }
-        if (game == null) {
-            System.out.println("hand-off:  no launcher to start; start the instance yourself");
-            return;
-        }
-        if (!changed) {
-            System.out.println("hand-off:  nothing changed, not relaunching");
+    static void handOff(Game game, Path gameDir, boolean changed, boolean dryRun, boolean patchOnly, boolean handBack) {
+        if (!handsBack(changed, handBack, dryRun, patchOnly, game != null)) {
+            if (dryRun || patchOnly) {
+                System.out.println("hand-off:  skipped (dry run or patch only)");
+            } else if (game == null) {
+                System.out.println("hand-off:  no launcher to start; start the instance yourself");
+            } else {
+                System.out.println("hand-off:  nothing changed, not relaunching");
+            }
             return;
         }
         System.out.println("hand-off:  " + game.command());
@@ -587,6 +594,15 @@ public final class Launcher {
         } else {
             System.out.println("hand-off:  failed - start the instance yourself");
         }
+    }
+
+    /**
+     * Whether a finished run gives the launch back. {@code handBack} is set when the mod spawned this
+     * window, i.e. the player's launch was halted and only this process can resume it.
+     */
+    static boolean handsBack(boolean changed, boolean handBack, boolean dryRun, boolean patchOnly, boolean launcher) {
+        if (dryRun || patchOnly || !launcher) return false;
+        return changed || handBack;
     }
 
     /**
