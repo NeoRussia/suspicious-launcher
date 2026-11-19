@@ -20,7 +20,8 @@ First launch of a Cleanroom instance:
    work next to Demonica (OptiFine, Nothirium: named, never removed);
 3. **Install** fetches the Eclipse `e89e6c6` archive from the author when `shaderpacks\` has none,
    applies 22 edits into `Eclipse-SUSY.zip`, installs the two resource packs (SHA-256 checked),
-   fetches Demonica `0.9.1` into `mods\`, writes the SUSY option set and points Demonica at the result;
+   fetches the pinned Demonica `0.9.1` (fixed asset, SHA-256 verified) into `mods\`, writes the SUSY
+   option set and points Demonica at the result;
 4. **Continue** relaunches the instance through the launcher's own CLI. On launchers with no external
    launch path (CurseForge and friends) it asks for a press of Play instead;
 5. every later launch is dormant: when the recorded state still matches what is on disk, no window
@@ -95,7 +96,7 @@ kept for history; the shipped window is `launcher\src`.
 | `config\shaders.properties` | the shader selection |
 | `shaderpacks\Eclipse-*.zip`, `Eclipse-SUSY.zip.txt` | fetched base, patched shader, saved options |
 | `resourcepacks\Suspicious Speculars*.zip` | the two packs |
-| `mods\Demonica-0.9.1.jar` | fetched only when the instance has no Demonica |
+| `mods\Demonica-0.9.1.jar` | the pinned release, fetched only when the instance has no Demonica; existing ones are never replaced |
 | `options.txt` | both packs enabled in `resourcePacks` |
 | `logs\suspicious-speculars.log`, `suspicious-speculars-launcher.log` | transcript and window log |
 
