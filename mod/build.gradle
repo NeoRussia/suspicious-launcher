@@ -17,13 +17,13 @@ apply plugin: 'net.minecraftforge.gradle.forge'
 //   set JAVA_HOME=C:\Program Files\Zulu\zulu-8
 //   %USERPROFILE%\.gradle\wrapper\dists\gradle-4.10.3-bin\<hash>\gradle-4.10.3\bin\gradle.bat build
 
-// Pre-release naming: every rebuild is suspicious-speculars-0.1.3pre-<n>, with <n> incremented once
-// per successful jar build. The base version stays 0.1.3 until a release is cut; the number is what
-// tells one build from another, in the file name, the manifest and the in-game log.
+// 0.1.4 is the first release: the jar is suspicious-speculars-0.1.4.jar and the @Mod version is the
+// same string. Development builds after it go back to the "<next>pre-<n>" form (bump the base by
+// hand here, and mod\build.number tells one pre build from another).
 def buildNumberFile = file('build.number')
 int nextBuild = (buildNumberFile.exists() ? buildNumberFile.text.trim().toInteger() : 0) + 1
 
-version = "0.1.3pre-${nextBuild}"
+version = '0.1.4'
 group = 'suspiciousspeculars'
 archivesBaseName = 'suspicious-speculars'
 
@@ -110,8 +110,11 @@ jar {
             'FMLCorePluginContainsFMLMod': 'true'
         )
     }
-    // the next build gets the next number; only a jar that was actually written advances it
+    // the next build gets the next number; only a jar that was actually written advances it, and a
+    // release build (a plain version) leaves the counter for the development line after it
     doLast {
-        buildNumberFile.text = nextBuild.toString()
+        if (version.toString().contains('pre-')) {
+            buildNumberFile.text = nextBuild.toString()
+        }
     }
 }

@@ -55,11 +55,11 @@ powershell -NoProfile -ExecutionPolicy Bypass -File launcher\build.ps1 -NoDiff
 # 2. the mod (ForgeGradle 2.3 needs Gradle 4.10.3 and JAVA_HOME=Zulu 8, not 25)
 $env:JAVA_HOME = "C:\Program Files\Zulu\zulu-8"
 gradle build --offline
-# -> mod\build\libs\suspicious-speculars-0.1.3pre-<n>.jar
+# -> mod\build\libs\suspicious-speculars-0.1.4.jar
 ```
 
 Install by dropping that jar into `mods\`. The build number in `mod\build.number` advances on every
-successful jar build; the `@Mod` version stays `0.1.3pre` until a release is cut.
+successful jar build; a release build carries the plain version instead (`0.1.4`).
 
 `launcher\build.ps1` without `-NoDiff` also runs the window's pixel gate, which lives with the design
 harness (`Work\ui-harness` in the development workspace, not in this repository) and prints

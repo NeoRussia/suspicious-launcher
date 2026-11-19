@@ -37,8 +37,9 @@ public final class SuspiciousSpeculars {
 
     public static final String MODID = "suspiciousspeculars";
     public static final String NAME = "Suspicious Speculars";
-    public static final String VERSION = "0.1.3pre"; // the @Mod annotation; the jar name has the build number
-    /** Full build version from mcmod.info (0.1.3pre-7), so logs and state name the exact jar. */
+    public static final String VERSION = "0.1.4"; // the @Mod annotation; on a release the jar carries the same string
+    /** Full build version from mcmod.info (0.1.4, or 0.1.5pre-2 during development), so logs and
+     * state name the exact jar. */
     private static final String BUILD = buildVersion();
 
     private static String buildVersion() {
