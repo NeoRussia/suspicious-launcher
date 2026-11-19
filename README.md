@@ -1,10 +1,10 @@
-# SUSY Shader Options
+# SUSY Shader Option
 
 Installer for the **Suspicious Speculars** shader pack: a Forge 1.12.2 mod with a coremod hand-over,
 the patch data it applies, and the Swing launcher window it ships.
 
 The repository and artifact names keep their historic `suspicious-launcher` / `suspicious-speculars`
-spelling; only the project's display name is "SUSY Shader Options".
+also known as "SUSY Shader Option".
 
 It is not the resource packs and not the shader. The packs are fetched at install time from
 [NeoRussia/suspicious-speculars](https://github.com/NeoRussia/suspicious-speculars), and the shader
@@ -126,3 +126,11 @@ distributed fork must stay under the same licence and carry its source.
 
 Contributions are expected to follow the pack's `AI_POLICY.md`: disclose AI assistance, and have a
 human owner who can explain the change.
+
+## AI disclosure
+
+Built with AI assistance: the implementation — patcher, mod, coremod, window, tests and docs — was
+written largely with the assistance of an AI coding agent (OpenCode, running a DeepSeek model) working from the
+maintainer's design and decisions. The visual design, art, shader work, releases and in-game testing
+are human, and no AI-generated textures, models or audio are included. The maintainer owns the code
+and can explain it.
