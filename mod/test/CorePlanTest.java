@@ -39,6 +39,15 @@ public final class CorePlanTest {
         expect("stale state hands over", CorePlan.Action.HAND_OVER,
                 props("packs-update", "false", "false"), true, true);
 
+        // a shader patched from older data is work of its own: the file matches its recorded hash, but
+        // the release's shader edits have not arrived, so the window has something to do
+        expect("data patched from older data hands over", CorePlan.Action.HAND_OVER,
+                props("current", "false", "false"), true, true, true);
+        expect("data patched from older data without a launcher patches here", CorePlan.Action.PATCH_IN_PROCESS,
+                props("current", "false", "false"), false, true, true);
+        expect("attempted data rebuild patches here", CorePlan.Action.PATCH_IN_PROCESS,
+                props("current", "false", "true"), true, true, true);
+
         // the user's toggle wins over everything
         expect("checkOnLaunch off does nothing", CorePlan.Action.NOTHING,
                 props("base-missing", "true", "false"), true, false);
@@ -64,7 +73,12 @@ public final class CorePlanTest {
 
     private static void expect(String name, CorePlan.Action want, Properties state,
                                boolean launcher, boolean allowed) {
-        CorePlan.Action got = CorePlan.decide(state, launcher, allowed);
+        expect(name, want, state, launcher, allowed, false);
+    }
+
+    private static void expect(String name, CorePlan.Action want, Properties state,
+                               boolean launcher, boolean allowed, boolean staleShader) {
+        CorePlan.Action got = CorePlan.decide(state, launcher, allowed, staleShader);
         if (got == want) {
             passed++;
             System.out.println("  PASS  " + name);

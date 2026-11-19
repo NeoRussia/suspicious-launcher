@@ -84,6 +84,9 @@ public final class PatcherWindow extends JPanel {
     private boolean busy;
     private boolean complete;
     private boolean installed;
+
+    /** A newer pack release than what is installed, shown in the band and on the button. */
+    private String updateVersion = "";
     private boolean failed;
     /** Frame 26 of the GIF: the same installed look, but with its own "restart" wording. */
     private boolean gifDone;
@@ -163,6 +166,15 @@ public final class PatcherWindow extends JPanel {
     /** True once a patched shader exists, which changes Install to Reinstall. */
     public void setInstalled(boolean value) {
         installed = value;
+        repaint();
+    }
+
+    /**
+     * A newer pack release than the installed one: the band says so and the button reads Update, so
+     * a hand-over caused by a release does not look like an invitation to reinstall the same thing.
+     */
+    public void setUpdateAvailable(String version) {
+        updateVersion = version == null ? "" : version.trim();
         repaint();
     }
 
@@ -477,8 +489,22 @@ public final class PatcherWindow extends JPanel {
             Frame.raised(g, ACTION.x, ACTION.y, ACTION.width, ACTION.height, 2,
                     Palette.BEVEL_LIGHT, Palette.BEVEL_SHADOW, Palette.PANEL);
         }
-        String label = complete ? "Continue" : (installed ? "Reinstall" : "Install");
-        int labelX = complete ? 405 : (installed ? 401 : 411);
+        String label;
+        int labelX;
+        if (complete) {
+            label = "Continue";
+            labelX = 405;
+        } else if (!updateVersion.isEmpty()) {
+            label = "Update";
+            labelX = 411 + (font.width("Install", Metrics.TEXT_ROW)
+                    - font.width("Update", Metrics.TEXT_ROW)) / 2;
+        } else if (installed) {
+            label = "Reinstall";
+            labelX = 401;
+        } else {
+            label = "Install";
+            labelX = 411;
+        }
         font.draw(g, label, labelX, 442, Metrics.TEXT_ROW, Palette.INK);
     }
 
@@ -535,6 +561,10 @@ public final class PatcherWindow extends JPanel {
     /** What the band shows, in order, with the "+N more" line the web build's error list adds. */
     private List<String[]> bandLines() {
         List<String[]> lines = new ArrayList<String[]>();
+        if (!updateVersion.isEmpty() && !complete) {
+            // the release the hand-over came for: say what it is before anything else
+            lines.addAll(wrap(new String[]{"", "update " + updateVersion + " available", null}));
+        }
         if (failed) {
             for (String[] m : messages) lines.addAll(wrap(m));
         }

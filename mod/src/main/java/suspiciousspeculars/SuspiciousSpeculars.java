@@ -37,7 +37,7 @@ public final class SuspiciousSpeculars {
 
     public static final String MODID = "suspiciousspeculars";
     public static final String NAME = "Suspicious Speculars";
-    public static final String VERSION = "0.1.4"; // the @Mod annotation; on a release the jar carries the same string
+    public static final String VERSION = "0.1.5"; // the @Mod annotation; on a release the jar carries the same string
     /** Full build version from mcmod.info (0.1.4, or 0.1.5pre-2 during development), so logs and
      * state name the exact jar. */
     private static final String BUILD = buildVersion();
@@ -107,7 +107,6 @@ public final class SuspiciousSpeculars {
     private String lastMessage = "";
     private boolean patchedThisSession;
     private boolean updateWaiting;
-    private boolean updateOffered;
     private String availableVersion = "";
     private boolean noticed;
 
@@ -488,7 +487,14 @@ public final class SuspiciousSpeculars {
                     + " is gone; handing over");
             state.setProperty("status", "stale");
         }
-        if (CorePlan.decide(state, true, checkOnLaunch()) != CorePlan.Action.HAND_OVER) return false;
+        // A shader is stale not only when the file is gone: the patch itself changes between releases,
+        // and an install patched from older data has to be rebuilt. That is work, so it earns the window
+        // on this launch instead of a silent rewrite the player only finds in the log.
+        boolean staleShader = !Patcher.dataVersion(dataDir).equals(state.getProperty("dataVersion"));
+        if (staleShader) {
+            log.info("shader: patch data changed since it was written; handing over");
+        }
+        if (CorePlan.decide(state, true, checkOnLaunch(), staleShader) != CorePlan.Action.HAND_OVER) return false;
 
         state.setProperty(CorePlan.ATTEMPTED, "true");
         saveState(state, "hand-over");
@@ -618,33 +624,9 @@ public final class SuspiciousSpeculars {
         }
     }
 
-    /** True when the waiting update has not been dismissed for its version yet. */
-    public boolean updatePendingForDisplay() {
-        if (!updatePendingFromState()) return false;
-        String dismissed = state().getProperty("dismissedVersion", "");
-        return !versionFromState().equals(dismissed);
-    }
-
     public String pendingUpdateDetail() {
         String text = state().getProperty("updatePacks", "");
         return text == null ? "" : text;
-    }
-
-    /**
-     * Opens the installer screen on the main menu, once per session, when the state says an update
-     * is waiting - so the next restart after an update is detected shows it without a command.
-     */
-    @SideOnly(Side.CLIENT)
-    @SubscribeEvent
-    public void onGuiOpen(net.minecraftforge.client.event.GuiScreenEvent.InitGuiEvent.Post event) {
-        if (updateOffered || !(event.getGui() instanceof net.minecraft.client.gui.GuiMainMenu)) return;
-        if (!updatePendingForDisplay() && !needsSetup()) return;
-        updateOffered = true;
-        Minecraft.getMinecraft().addScheduledTask(new Runnable() {
-            public void run() {
-                Minecraft.getMinecraft().displayGuiScreen(new GuiInstaller(SuspiciousSpeculars.this));
-            }
-        });
     }
 
     private void say(TextFormatting colour, String text) {

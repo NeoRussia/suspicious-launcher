@@ -13,7 +13,7 @@ OP 498 1 1
 OP 598 1 1
 +		Indirect_lighting += doBlockLightLighting( vec3(TORCH_R,TORCH_G,TORCH_B), lightmap.x, feetPlayerPos, lpvPos, vec3(0.0), false, true);
 EDIT shaders/dimensions/all_solid.fsh f7579691b1c05ff50acfe260345fae403706e5a5387547850872bb99066dcdc5 2
-OP 1045 1 52
+OP 1045 1 61
 +
 +		// SUSY: glowing ores. GT and SUSY ores are one block per material (gregtech:ore_<material>), far too
 +		// many to list in block.properties, so their textures carry marker 244 instead and the shader's
@@ -43,7 +43,7 @@ OP 1045 1 52
 +		// SUSY: GregTech pipes are drawn by GregTech's own block renderers, and those draws never
 +		// resolve a specular sprite for their surfaces - every value in their _s maps is inert (proved
 +		// with a marker probe: pipe pixels never reached the material pass). Their block id does reach
-+		// the shader, so give the pipes their material from block.properties 701-705 instead.
++		// the shader, so give the pipes and cables their material from block.properties 701-706 instead.
 +		if (data_in.blockID >= 701 && data_in.blockID <= 705) {
 +			// Wood pipes share these blocks with the metal ones and differ only by sprite. The wood
 +			// sprites are the dark planks (texel luma ~0.47); the metal ones are bright grey 0.57-0.90
@@ -57,6 +57,15 @@ OP 1045 1 52
 +				// LD shells are the polished ones: dispersion fringe, the rest stay plain.
 +			OutSpecular.b = 0.0; // no effect marker: dispersion read as speckle on the LD shells
 +			}
++		}
++
++		// SUSY: cables are the same renderer without a usable per-texel split: their shading and their
++		// grey insulation straddle the 0.53 luma guard, so half the texels took the metal material and
++		// half did not - which read as speckle. Give the whole cable the material and no emission.
++		if (data_in.blockID == 706) {
++			OutSpecular.rg = vec2(190.0, 238.0) / 255.0;
++			OutSpecular.b = 0.0;
++			OutSpecular.a = 0.0;
 +		}
 +
 +		// SUSY: energy flow, only on conduits that carry something: laser and optical pipes. A

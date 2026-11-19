@@ -17,14 +17,19 @@ import java.util.List;
 import java.util.Properties;
 
 /**
- * {@code /suspiciousspeculars status|update|install|download|toggle}
+ * {@code /suspiciousspeculars status|update|install|download|toggle|help}
  *
  * status   what the last run did, and whether anything is waiting for a restart
+ * update   open the installer screen when a pack update is waiting
  * install  run the patcher now, ignoring the recorded state
  * download fetch Eclipse e89e6c6 from the author's repository, then patch; needs the internet
  * toggle   turn the "check at start-up" behaviour on or off
+ * help     list the subcommands
  */
 public final class CommandSuspicious extends CommandBase {
+
+    private static final String[] ACTIONS =
+            {"status", "update", "install", "download", "toggle", "help"};
 
     private final SuspiciousSpeculars mod;
 
@@ -44,7 +49,22 @@ public final class CommandSuspicious extends CommandBase {
 
     @Override
     public String getUsage(ICommandSender sender) {
-        return "/suspiciousspeculars <status|update|install|download|toggle>";
+        return "/suspiciousspeculars <status|update|install|download|toggle|help>";
+    }
+
+    /** Subcommands for tab completion, the way Forge shows a command's own arguments. */
+    @Override
+    public java.util.List<String> getTabCompletions(MinecraftServer server, ICommandSender sender,
+                                                    String[] args, net.minecraft.util.math.BlockPos targetPos) {
+        if (args.length == 1) {
+            String prefix = args[0].toLowerCase(java.util.Locale.ROOT);
+            List<String> out = new ArrayList<String>();
+            for (String action : ACTIONS) {
+                if (action.startsWith(prefix)) out.add(action);
+            }
+            return out;
+        }
+        return new ArrayList<String>();
     }
 
     @Override
@@ -68,9 +88,21 @@ public final class CommandSuspicious extends CommandBase {
             boolean next = !mod.checkOnLaunch();
             mod.setCheckOnLaunch(next);
             tell(sender, TextFormatting.GRAY, "Check at start-up is now " + (next ? "on" : "off") + ".");
+        } else if (action.equals("help")) {
+            help(sender);
         } else {
             throw new CommandException(getUsage(sender));
         }
+    }
+
+    private void help(ICommandSender sender) {
+        tell(sender, TextFormatting.GOLD, "Suspicious Speculars " + SuspiciousSpeculars.VERSION);
+        tell(sender, TextFormatting.GRAY, "/suspiciousspeculars status - what is installed, what is missing");
+        tell(sender, TextFormatting.GRAY, "/suspiciousspeculars install - patch now (applies on the next start)");
+        tell(sender, TextFormatting.GRAY, "/suspiciousspeculars update - open the installer for a waiting pack update");
+        tell(sender, TextFormatting.GRAY, "/suspiciousspeculars download - fetch Eclipse (about 45 MB), then patch");
+        tell(sender, TextFormatting.GRAY, "/suspiciousspeculars toggle - turn the check at start-up on or off");
+        tell(sender, TextFormatting.GRAY, "alias: /susyspeculars");
     }
 
     /** Pops the installer screen when an update is waiting; the command is just the way in. */

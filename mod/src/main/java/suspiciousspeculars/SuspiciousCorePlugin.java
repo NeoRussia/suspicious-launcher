@@ -55,6 +55,13 @@ public final class SuspiciousCorePlugin implements IFMLLoadingPlugin {
     private static final String LAUNCHER_VERSION = "assets/suspiciousspeculars/launcher.version";
     private static final String ATTEMPTED = "relaunchAttempted";
 
+    /**
+     * Mirrors {@code Patcher.MANIFEST_URL}. Read here as well because a release is invisible to the
+     * state until something asks the host, and the in-game prompt is no longer opened by itself.
+     */
+    private static final String MANIFEST =
+            "https://raw.githubusercontent.com/NeoRussia/suspicious-speculars/main/packs.txt";
+
     /** Mirrors {@code Patcher.OUT_SHADER}: this class must not link against mod classes. */
     private static final String SHADER = "Eclipse-SUSY.zip";
 
@@ -106,6 +113,31 @@ public final class SuspiciousCorePlugin implements IFMLLoadingPlugin {
                 if (missing != null) {
                     current = false;
                     log.warn("state says " + status + " but " + missing + " is gone; handing over");
+                }
+            }
+            // The patch itself changes between releases. A shader that still matches its recorded hash
+            // may have been patched from older data, so the release's shader edits have not arrived; the
+            // window is where a rebuild happens, so this earns a hand-over on this launch.
+            if (current && !dataVersion(dataDir).equals(state.getProperty("dataVersion"))) {
+                log.info("patch data changed since the shader was written; handing over");
+                current = false;
+            }
+            // The state only knows what the last run saw. Ask the host whether a newer pack release
+            // exists, so the window opens on the first launch after a release rather than one launch
+            // later. Offline, the state's verdict stands.
+            if (current && !update && !requested) {
+                String published = publishedVersion();
+                String installed = state.getProperty("packVersion", "");
+                if (installed.isEmpty()) installed = state.getProperty("availableVersion", "");
+                if (newer(published, installed)) {
+                    log.info("packs: " + published + " is published, " + installed
+                            + " is installed; handing over");
+                    // the window reads these to say "update <version> available" and label the
+                    // button Update, instead of offering a plain reinstall
+                    state.setProperty("updateAvailable", "true");
+                    state.setProperty("availableVersion", published);
+                    saveState(gameDir, state);
+                    current = false;
                 }
             }
             log.info("state: status=" + status + " update=" + update + " requested=" + requested
@@ -250,6 +282,18 @@ public final class SuspiciousCorePlugin implements IFMLLoadingPlugin {
         }
     }
 
+    /** The patch data marker written by {@link #ensureData}, or empty when it is not there. */
+    private static String dataVersion(File dataDir) {
+        try {
+            Path marker = dataDir.toPath().resolve(".bundle-version");
+            return Files.isRegularFile(marker)
+                    ? new String(Files.readAllBytes(marker), StandardCharsets.UTF_8).trim()
+                    : "";
+        } catch (Throwable t) {
+            return "";
+        }
+    }
+
     private static File ensureLauncher(File self, File config, Logger log) {
         File jar = new File(config, "launcher.jar");
         File marker = new File(config, "launcher.version");
@@ -366,6 +410,59 @@ public final class SuspiciousCorePlugin implements IFMLLoadingPlugin {
             }
         }
         return null;
+    }
+
+    /** VERSION from the published manifest, or "" when it cannot be read. */
+    private static String publishedVersion() {
+        java.net.URLConnection conn = null;
+        try {
+            String url = System.getProperty("suspiciousspeculars.manifestUrl", MANIFEST);
+            conn = new java.net.URL(url).openConnection();
+            conn.setConnectTimeout(2500);
+            conn.setReadTimeout(2500);
+            if (conn instanceof java.net.HttpURLConnection) {
+                conn.setRequestProperty("User-Agent", "SuspiciousSpeculars");
+            }
+            java.io.BufferedReader reader = new java.io.BufferedReader(
+                    new java.io.InputStreamReader(conn.getInputStream(),
+                            StandardCharsets.UTF_8));
+            try {
+                for (String line; (line = reader.readLine()) != null; ) {
+                    if (!line.startsWith("VERSION")) continue;
+                    String[] fields = line.split("\t");
+                    return fields.length > 1 ? fields[1].trim() : "";
+                }
+            } finally {
+                reader.close();
+            }
+        } catch (Throwable ignored) {
+            // offline, or the host is unreachable: the state's verdict stands
+        } finally {
+            if (conn instanceof java.net.HttpURLConnection) {
+                ((java.net.HttpURLConnection) conn).disconnect();
+            }
+        }
+        return "";
+    }
+
+    /** Numeric compare of dotted versions: 2026-11-19.1 is newer than 2026-11-18.1. */
+    private static boolean newer(String candidate, String installed) {
+        if (candidate == null || installed == null
+                || candidate.isEmpty() || installed.isEmpty()) {
+            return false;
+        }
+        String[] a = candidate.split("[^0-9]+");
+        String[] b = installed.split("[^0-9]+");
+        try {
+            for (int i = 0; i < Math.max(a.length, b.length); i++) {
+                int x = i < a.length && !a[i].isEmpty() ? Integer.parseInt(a[i]) : 0;
+                int y = i < b.length && !b[i].isEmpty() ? Integer.parseInt(b[i]) : 0;
+                if (x != y) return x > y;
+            }
+        } catch (NumberFormatException ignored) {
+            return false;
+        }
+        return false;
     }
 
     /** A jar named after {@code token}, in mods/ or FML's versioned subfolder. */

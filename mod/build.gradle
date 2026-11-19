@@ -17,13 +17,13 @@ apply plugin: 'net.minecraftforge.gradle.forge'
 //   set JAVA_HOME=C:\Program Files\Zulu\zulu-8
 //   %USERPROFILE%\.gradle\wrapper\dists\gradle-4.10.3-bin\<hash>\gradle-4.10.3\bin\gradle.bat build
 
-// 0.1.4 is the first release: the jar is suspicious-speculars-0.1.4.jar and the @Mod version is the
+// 0.1.5 is a release: the jar is suspicious-speculars-0.1.5.jar and the @Mod version is the
 // same string. Development builds after it go back to the "<next>pre-<n>" form (bump the base by
 // hand here, and mod\build.number tells one pre build from another).
 def buildNumberFile = file('build.number')
 int nextBuild = (buildNumberFile.exists() ? buildNumberFile.text.trim().toInteger() : 0) + 1
 
-version = '0.1.4'
+version = '0.1.5'
 group = 'suspiciousspeculars'
 archivesBaseName = 'suspicious-speculars'
 

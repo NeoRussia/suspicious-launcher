@@ -103,6 +103,8 @@ public final class Patcher {
     private boolean late;
     private boolean force;
     private boolean dryRun;
+    /** The patch data identity the shader on disk was patched with, or null when it was not patched this run. */
+    private String outputDataVersion;
 
     private Log log = new Log() {
         public void line(String text) {
@@ -308,13 +310,20 @@ public final class Patcher {
         say("base: " + baseName);
 
         Properties state = loadState(stateFile);
+        // The patch itself changes between releases (new shader edits, new block ids), and a file that
+        // still matches its recorded hash is no evidence that it was patched from this data. An
+        // install that only compared hashes kept its old shader across a release that changed the
+        // patch, so the data identity is part of "current".
+        String dataVersion = dataVersion();
         boolean shaderCurrent = !force
                 && "true".equals(state.getProperty("installed"))
                 && Files.exists(target)
                 && sha256(target).equals(state.getProperty("outputHash"))
-                && sha256(base).equals(state.getProperty("baseHash"));
+                && sha256(base).equals(state.getProperty("baseHash"))
+                && dataVersion.equals(state.getProperty("dataVersion"));
 
         if (shaderCurrent) {
+            outputDataVersion = dataVersion;
             say("shader: current");
         } else if (late) {
             say("shader: out of date, but the shader zip is open - restart to patch it");
@@ -339,6 +348,7 @@ public final class Patcher {
                 return;
             }
             say("patched " + editedFiles + " files -> " + OUT_SHADER);
+            outputDataVersion = dataVersion;
         }
 
         // The pack step runs even when the shader is current: a pack update is a manifest change,
@@ -1043,6 +1053,10 @@ public final class Patcher {
             state.setProperty("installed", "true");
             state.setProperty("baseHash", sha256(base));
             state.setProperty("outputHash", sha256(target));
+            // Only when this run patched the shader, or found it current with this very data: a run
+            // that could not patch (the zip was open) must leave the old value in place so the next
+            // launch still sees the shader as stale.
+            if (outputDataVersion != null) state.setProperty("dataVersion", outputDataVersion);
             state.setProperty("packVersion", packVersion);
             state.setProperty("pack", PACK_BASE);
             state.setProperty("addon", PACK_ADDON);
@@ -1062,6 +1076,26 @@ public final class Patcher {
         try (Writer w = Files.newBufferedWriter(stateFile, StandardCharsets.UTF_8)) {
             state.store(w, "Suspicious Speculars");
         }
+    }
+
+    /**
+     * Identity of the patch data in {@code dataDir}: the marker the mod writes when it unpacks its
+     * bundle ({@code .bundle-version}), or empty when there is none - the CLI is pointed straight at a
+     * data directory. Empty on both sides compares equal, so the CLI still goes dormant; a marker that
+     * changes - a release with new shader edits - makes the output stale.
+     */
+    public static String dataVersion(Path dataDir) {
+        Path marker = dataDir.resolve(".bundle-version");
+        if (!Files.isRegularFile(marker)) return "";
+        try {
+            return new String(Files.readAllBytes(marker), StandardCharsets.UTF_8).trim();
+        } catch (IOException e) {
+            return "";
+        }
+    }
+
+    private String dataVersion() {
+        return dataVersion(dataDir);
     }
 
     /** Appends this run to logs/suspicious-speculars.log; called even after a failure. */

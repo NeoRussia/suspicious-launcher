@@ -29,8 +29,9 @@ public final class CorePlan {
      * @param state            the recorded state, possibly empty on a first run
      * @param launcherPresent  whether a launcher jar was found in the instance
      * @param allowed          the user's checkOnLaunch toggle
+     * @param staleShader      the shader on disk was patched from other data than this build carries
      */
-    public static Action decide(Properties state, boolean launcherPresent, boolean allowed) {
+    public static Action decide(Properties state, boolean launcherPresent, boolean allowed, boolean staleShader) {
         if (!allowed) return Action.NOTHING;
 
         // "installed" means the shader was written by the last run; with no pending update there is
@@ -42,7 +43,9 @@ public final class CorePlan {
         boolean requested = "true".equals(state.getProperty("installOnNextStart"));
         boolean attempted = "true".equals(state.getProperty(ATTEMPTED));
 
-        if (current && !update && !requested) return Action.NOTHING;
+        // A rebuild is work too: the shader still matches its recorded hash, but it was patched from
+        // older data, so the release's new shader edits have not arrived yet.
+        if (current && !update && !requested && !staleShader) return Action.NOTHING;
         if (!launcherPresent) return Action.PATCH_IN_PROCESS;
         // The guard exists to stop a hand-over loop within one launch. An explicit request from the
         // game ("Quit and install") is not a loop, so it must not be swallowed by a stale flag.

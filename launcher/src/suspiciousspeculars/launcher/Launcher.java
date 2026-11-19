@@ -493,6 +493,7 @@ public final class Launcher {
             // the window exists to get people unstuck: say what is missing before the first click
             panel.setWarnings(prerequisiteLines(gameDir, dataDir, true));
             showRecordedFailure(panel, gameDir);
+            showPendingUpdate(panel, gameDir);
 
             final javax.swing.JFrame frame = new javax.swing.JFrame("Suspicious Speculars");
             frame.setUndecorated(true);
@@ -768,6 +769,7 @@ public final class Launcher {
             panel.setOutputName(Patcher.OUT_SHADER);
             panel.setWarnings(prerequisiteLines(gameDir, dataDir, true));
             showRecordedFailure(panel, gameDir);
+            showPendingUpdate(panel, gameDir);
             panel.savePreview(out.toFile());
             System.out.println("preview: " + out.toAbsolutePath());
         } catch (Throwable t) {
@@ -789,6 +791,7 @@ public final class Launcher {
                 panel.setOutputName(Patcher.OUT_SHADER);
                 panel.setWarnings(prerequisiteLines(gameDir, dataDir, true));
                 showRecordedFailure(panel, gameDir);
+                showPendingUpdate(panel, gameDir);
             } else if ("failed".equals(errors)) {
                 // the failure band as a run leaves it, so the state can be reviewed without a game
                 List<String[]> msg = new ArrayList<String[]>();
@@ -823,6 +826,21 @@ public final class Launcher {
             }
         } catch (Throwable ignored) {
             // an unreadable state simply shows nothing; the run itself will say why
+        }
+    }
+
+    /**
+     * A newer pack release than the installed one: the band names it and the button reads Update, so
+     * the window that a release triggered does not look like a plain reinstall.
+     */
+    static void showPendingUpdate(suspiciousspeculars.launcher.ui.PatcherWindow panel, Path gameDir) {
+        try {
+            Properties state = Patcher.loadState(Patcher.stateFile(gameDir));
+            if (!"true".equals(state.getProperty("updateAvailable"))) return;
+            String version = state.getProperty("availableVersion", "");
+            if (!version.isEmpty()) panel.setUpdateAvailable(version);
+        } catch (Throwable ignored) {
+            // an unreadable state simply shows nothing; the run itself will say what it found
         }
     }
 
@@ -939,17 +957,26 @@ public final class Launcher {
         return "";
     }
 
+    /**
+     * The statuses that mean a patched shader is on disk: a completed install, a dormant one (the state
+     * the next launch records), a pending pack update, and a restart that the next launch will apply. A
+     * window opened on a current instance is a rebuild of something that exists, not a fresh install.
+     */
+    static boolean isInstalledStatus(String status) {
+        return Patcher.INSTALLED.equals(status)
+                || Patcher.PACKS_UPDATE.equals(status)
+                || Patcher.CURRENT.equals(status)
+                || Patcher.RESTART_REQUIRED.equals(status);
+    }
+
     /** True once a run has completed: the output slot then shows the cut-out goog block. */
     static boolean isInstalled(Path gameDir) {
-        String status = state(gameDir).getProperty("status", "");
-        return Patcher.INSTALLED.equals(status) || Patcher.PACKS_UPDATE.equals(status);
+        return isInstalledStatus(state(gameDir).getProperty("status", ""));
     }
 
     static String actionLabel(Path gameDir, Path dataDir) {
         Properties state = state(gameDir);
-        String status = state.getProperty("status", "");
-        boolean installed = Patcher.INSTALLED.equals(status) || Patcher.PACKS_UPDATE.equals(status);
-        if (!installed) return "Install";
+        if (!isInstalledStatus(state.getProperty("status", ""))) return "Install";
         if (updatePending(state, dataDir)) return "Update";
         return "Reinstall";
     }
@@ -961,7 +988,8 @@ public final class Launcher {
         String local = state.getProperty("packVersion", "");
         if (local.isEmpty()) local = manifestVersion(dataDir);
         if (available.isEmpty() || local.isEmpty()) return true;
-        return compareVersions(available, local) >= 0;
+        // strictly newer: an "update" to the version already installed is the reinstall it used to be
+        return compareVersions(available, local) > 0;
     }
 
     static String versionLabel() {

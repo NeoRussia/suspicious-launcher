@@ -302,6 +302,51 @@ $out = Run $inst $manifest
 $st = StateOf $inst
 Check "a completed run clears the hand-over guard" ($st['relaunchAttempted'] -eq 'false') $st['relaunchAttempted']
 
+# 17. the patch data changes between releases, and a shader that still matches its recorded hash is no
+#     evidence that it was patched from this data: an install that only compared hashes kept its old
+#     shader across a release that changed the patch, so the release's new shader edits never arrived
+New-Instance $inst
+$manifest17 = New-Repo (Join-Path $Work "repo-17") "1.0"
+$out = Run $inst $manifest17
+$stateFile = "$inst\config\suspicious-speculars.properties"
+$st = StateOf $inst
+Check "a fresh install records its patch data identity" ($st.ContainsKey('dataVersion')) `
+    ("keys: " + (($st.Keys | Sort-Object) -join ","))
+Check "the shader is patched on that first run" ($out -match 'patched \d+ files')
+$shaderBefore = (Get-FileHash "$inst\shaderpacks\Eclipse-SUSY.zip" -Algorithm SHA256).Hash
+(Get-Content $stateFile) | Where-Object { $_ -notmatch '^dataVersion=' } | Set-Content $stateFile
+Add-Content $stateFile 'dataVersion=0.0.0-stale 0'
+$out = Run $inst $manifest17
+$st = StateOf $inst
+$shaderAfter = (Get-FileHash "$inst\shaderpacks\Eclipse-SUSY.zip" -Algorithm SHA256).Hash
+Check "a stale patch data identity repatches the shader" ($out -match 'patched \d+ files') `
+    (($out -split "`r?`n" | Where-Object { $_ -match 'shader|patched' }) -join ' / ')
+Check "the repatch rewrites the shader file" ($shaderBefore -ne $shaderAfter)
+Check "the install records the data it patched with" ($st['dataVersion'] -eq '') ("[" + $st['dataVersion'] + "]")
+$out = Run $inst $manifest17
+Check "the shader is current again on the run after" ($out -match 'shader: current') `
+    (($out -split "`r?`n" | Where-Object { $_ -match 'shader' }) -join ' / ')
+
+# 18. the window's button must say what the state means: a complete instance is not a fresh one, and
+#     "Update" belongs to a newer pack release, not to any window that happens to open
+$launcherJar = Join-Path $Root "dist\suspicious-speculars-launcher.jar"
+if (Test-Path $launcherJar) {
+    $labelGame = Join-Path $Work "labelprobe-game"
+    Remove-Item $labelGame -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Force -Path "$labelGame\config" | Out-Null
+    $labelOut = Join-Path $Work "labelprobe"
+    Remove-Item $labelOut -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Force -Path $labelOut | Out-Null
+    & $javac -cp $launcherJar -d $labelOut (Join-Path $Root "test\ActionLabelProbe.java") 2>&1 | Out-Null
+    $labels = & $java -cp "$launcherJar;$labelOut" suspiciousspeculars.launcher.ActionLabelProbe $labelGame $data 2>&1
+    Check "a fresh state says Install" ($labels[0] -eq "Install") (($labels -join " / "))
+    Check "a current state says Reinstall" ($labels[1] -eq "Reinstall") (($labels -join " / "))
+    Check "a newer pack release says Update" ($labels[2] -eq "Update") (($labels -join " / "))
+    Check "an up-to-date release says Reinstall" ($labels[3] -eq "Reinstall") (($labels -join " / "))
+} else {
+    "  SKIP  window button labels (no launcher jar)"
+}
+
 ""
 "== $script:pass passed, $script:fail failed =="
 if ($script:fail -gt 0) { exit 1 }
