@@ -7,26 +7,28 @@
 #
 #   powershell -NoProfile -ExecutionPolicy Bypass -File .\test\run-scenarios.ps1
 #
-# Each scenario builds its own instance under %TEMP%\ss-scenarios and prints PASS/FAIL.
+# Each scenario builds its own instance under .scratch\ss-scenarios (inside this project) and prints
+# PASS/FAIL.
 #
-# This is the development suite: it expects the shader workspace beside this folder (the stock and
-# repacked Eclipse zips), the pack host repository, a Prism instance carrying Demonica and the
+# This is the development suite: it expects the shader project at Work\shader (the stock and repacked
+# Eclipse zips in workspace\, the pack host in host\), a Prism instance carrying Demonica and the
 # Cleanroom relauncher, and a JDK 8 on PATH. Missing pieces are reported as SKIP, never as a pass.
 param(
     [string]$Root = (Split-Path $PSScriptRoot -Parent),
-    [string]$Repo = (Join-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) "suspicious-speculars"),
-    [string]$Work = "$env:TEMP\ss-scenarios",
+    [string]$ShaderRoot = (Join-Path (Split-Path (Split-Path (Split-Path $PSScriptRoot -Parent) -Parent) -Parent) "shader"),
+    [string]$Repo = "",
+    [string]$Work = (Join-Path (Split-Path $PSScriptRoot -Parent) ".scratch\ss-scenarios"),
     [string]$GameInstance = "I:\Games\PrismLauncher-Windows-MinGW-w64-Portable-10.0.2\instances\supersymmetry-0.2.0.2\minecraft"
 )
 
 $ErrorActionPreference = "Stop"
-$work = Split-Path $Root -Parent
+if (-not $Repo) { $Repo = Join-Path $ShaderRoot "host" }
 $java = "C:\Program Files\Zulu\zulu-8\bin\java.exe"
 $javac = "C:\Program Files\Zulu\zulu-8\bin\javac.exe"
 $cli = Join-Path $Root "prelauncher\suspicious-speculars-pre.jar"
 $data = Join-Path $Root "patcher\data"
-$baseZip = Join-Path $work "chromapatch\research\eclipse-base-e89e6c6.zip"
-$decoyZip = Join-Path $work "chromapatch\dist\Eclipse-skytest.zip"
+$baseZip = Join-Path $ShaderRoot "workspace\research\eclipse-base-e89e6c6.zip"
+$decoyZip = Join-Path $ShaderRoot "workspace\dist\Eclipse-skytest.zip"
 $mc = $GameInstance
 $forgeBin = Join-Path $env:USERPROFILE ".gradle\caches\minecraft\net\minecraftforge\forge\1.12.2-14.23.5.2838\stable\39\forgeBin-1.12.2-14.23.5.2838.jar"
 $log4j = Join-Path $env:USERPROFILE ".gradle\caches\cleanroom_gradle\maven_downloader\org\apache\logging\log4j\log4j-api\2.8.1\log4j-api-2.8.1.jar"

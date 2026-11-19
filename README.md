@@ -62,7 +62,7 @@ Install by dropping that jar into `mods\`. The build number in `mod\build.number
 successful jar build; a release build carries the plain version instead (`0.1.5`).
 
 `launcher\build.ps1` without `-NoDiff` also runs the window's pixel gate, which lives with the design
-harness (`Work\ui-harness` in the development workspace, not in this repository) and prints
+harness (`Work\launcher\harness` in the development workspace, not in this repository) and prints
 `no harness beside this repo` when it is absent.
 
 `patcher\data\` — the patch definition, the replacement files and the SUSY option seed — is generated
@@ -114,7 +114,7 @@ missing and corrupt packs, base selection, dependency states, a failed write, in
 hand-over decision, version reporting - and prints PASS/FAIL per check.
 
 It is the development suite, not a self-contained one: it expects the shader workspace beside this
-folder (the stock and repacked Eclipse zips under `..\chromapatch`), the pack host repository, a
+folder (the stock and repacked Eclipse zips under `..\..\shader\workspace`), the pack host repository, a
 Prism instance carrying Demonica and the Cleanroom relauncher, and a JDK 8. Anything missing is
 reported as SKIP rather than passing silently; `-GameInstance`, `-Root` and `-Repo` override the
 defaults. What needs a game: the window itself, the chat notices, and the coremod's hand-over.

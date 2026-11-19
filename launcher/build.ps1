@@ -65,15 +65,15 @@ $hash = (Get-FileHash $jarpath -Algorithm SHA256).Hash.Substring(0, 8)
 "launcher jar: {0:N0} B  {1}" -f $size, $hash
 
 # --- pixel gate -------------------------------------------------------------------------------
-# The checks live with the harness (Work\ui-harness\gate.ps1): it renders the 27 states from this
+# The checks live with the harness (Work\launcher\harness\gate.ps1): it renders the 27 states from this
 # jar, diffs them against the reference frames, and checks the tooltips, the error band, the tile
 # links and the sound cue. -NoDiff builds only; the harness can be run on its own afterwards.
-$gate = Join-Path $root '..\ui-harness\gate.ps1'
+$gate = Join-Path $root '..\harness\gate.ps1'
 if ($NoDiff) {
     "diff: skipped (-NoDiff)"
 } elseif (Test-Path $gate) {
     & powershell -NoProfile -ExecutionPolicy Bypass -File $gate -SkipBuild
     if ($LASTEXITCODE -ne 0) { throw "pixel gate: the window is worse than the baseline" }
 } else {
-    "diff: no harness beside this repo (expected ..\ui-harness\gate.ps1)"
+    "diff: no harness beside this repo (expected ..\harness\gate.ps1)"
 }
