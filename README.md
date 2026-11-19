@@ -1,5 +1,9 @@
 # SUSY Shader Option
 
+![Prismatic film on a shape block from ArchitectureCraft: Renovated](docs/screenshots/prismatic-film.jpg)
+
+*Shape: [ArchitectureCraft: Renovated](https://github.com/NeoRussia/ArchitectureCraft-Renovated). The prismatic film over it is the shader's.*
+
 Installer for the **Suspicious Speculars** shader pack: a Forge 1.12.2 mod with a coremod hand-over, the
 patch data it applies, and the Swing launcher window it ships.
 
@@ -13,6 +17,12 @@ missing before it installs.
 It is not the resource packs and not the shader. The packs are fetched at install time from
 [NeoRussia/suspicious-speculars](https://github.com/NeoRussia/suspicious-speculars), and the shader base
 is fetched from its own author. Nothing of theirs is redistributed here.
+
+## Screenshots
+
+| | |
+|---|---|
+| ![Emissive blocks, reflections and coloured light on a night build](docs/screenshots/night-build.jpg)<br>*Emissive GregTech blocks, screen-space reflections and coloured light.* | ![Lamps, machine fronts and specular on their casings](docs/screenshots/lamps-and-machines.jpg)<br>*Lamps and machine fronts: labPBR specular on the casings, light bouncing off a glossy floor.* |
 
 ## What it puts in your instance
 
