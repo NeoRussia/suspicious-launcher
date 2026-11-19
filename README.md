@@ -1,7 +1,10 @@
-# suspicious-launcher
+# SUSY Shader Options
 
 Installer for the **Suspicious Speculars** shader pack: a Forge 1.12.2 mod with a coremod hand-over,
 the patch data it applies, and the Swing launcher window it ships.
+
+The repository and artifact names keep their historic `suspicious-launcher` / `suspicious-speculars`
+spelling; only the project's display name is "SUSY Shader Options".
 
 It is not the resource packs and not the shader. The packs are fetched at install time from
 [NeoRussia/suspicious-speculars](https://github.com/NeoRussia/suspicious-speculars), and the shader
