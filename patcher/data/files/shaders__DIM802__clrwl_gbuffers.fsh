@@ -1,0 +1,13 @@
+#version 430 compatibility
+
+#define OVERWORLD_SHADER
+
+#define PLANET_MOON
+
+#define WORLD
+
+#define COLORWHEEL
+#define ENTITIES
+#define BLOCKENTITIES
+
+#include "/dimensions/all_solid.fsh"

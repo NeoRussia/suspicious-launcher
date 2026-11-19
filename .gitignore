@@ -1,0 +1,24 @@
+# build output
+build/
+build-*/
+out/
+dist/
+*.class
+
+# Gradle's own caches (they embed absolute paths from the machine that built)
+.gradle/
+
+# the jar build.ps1 copies beside the sources
+launcher/suspicious-speculars-launcher.jar
+
+# local test fixture (90 MB) and harness scratch
+test-instance/
+.scratch/
+__pycache__/
+*.pyc
+
+# logs and editor state
+*.log
+.idea/
+*.iml
+.vscode/

@@ -1,0 +1,117 @@
+buildscript {
+    repositories {
+        maven { url 'https://maven.minecraftforge.net' }
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'net.minecraftforge.gradle:ForgeGradle:2.3-SNAPSHOT'
+    }
+}
+apply plugin: 'net.minecraftforge.gradle.forge'
+
+// Suspicious Speculars - optional file in SuperSymmetry.
+//
+// 1.12.2 + ForgeGradle 2.3 predates Gradle 9 entirely: build with the Gradle 4.10.3 distribution and
+// JAVA_HOME pointing at Zulu 8, e.g.
+//
+//   set JAVA_HOME=C:\Program Files\Zulu\zulu-8
+//   %USERPROFILE%\.gradle\wrapper\dists\gradle-4.10.3-bin\<hash>\gradle-4.10.3\bin\gradle.bat build
+
+// Pre-release naming: every rebuild is suspicious-speculars-0.1.3pre-<n>, with <n> incremented once
+// per successful jar build. The base version stays 0.1.3 until a release is cut; the number is what
+// tells one build from another, in the file name, the manifest and the in-game log.
+def buildNumberFile = file('build.number')
+int nextBuild = (buildNumberFile.exists() ? buildNumberFile.text.trim().toInteger() : 0) + 1
+
+version = "0.1.3pre-${nextBuild}"
+group = 'suspiciousspeculars'
+archivesBaseName = 'suspicious-speculars'
+
+minecraft {
+    version = '1.12.2-14.23.5.2838' // last 1.12.2 build with a published -userdev; runs fine on 2860
+    runDir = 'run'
+    mappings = 'stable_39'
+}
+
+sourceSets {
+    main {
+        java {
+            // the patcher core is shared with the command-line front end
+            srcDirs = ['src/main/java', '../core']
+        }
+        resources {
+            srcDirs = ['src/main/resources']
+        }
+    }
+}
+
+tasks.withType(JavaCompile) {
+    sourceCompatibility = '1.8'
+    targetCompatibility = '1.8'
+}
+
+dependencies {
+    // nothing beyond Minecraft and Forge
+}
+
+// The patch data (patcher/data, 500 files) travels as one bundle, built by patcher/bundle.py
+task copyBundle(type: Copy) {
+    from('../patcher') {
+        include 'data-bundle.zip'
+        include 'data-bundle.version'
+    }
+    into "${buildDir}/resources/main/assets/suspiciousspeculars"
+    rename 'data-bundle.zip', 'patch-bundle.zip'
+    rename 'data-bundle.version', 'patch-bundle.version'
+}
+
+processResources {
+    // mcmod.info carries ${version}; the build script is the only place the number lives
+    inputs.property 'version', project.version
+    filesMatching('mcmod.info') {
+        expand version: project.version
+    }
+}
+
+// The window itself travels as a resource too, so one jar is enough to install. It is unpacked to
+// config/suspicious-speculars/launcher.jar on the first launch (or when this build differs), which is
+// where SuspiciousCorePlugin looks before it decides to hand over.
+task copyLauncher {
+    doLast {
+        def src = file('../dist/suspicious-speculars-launcher.jar')
+        if (!src.exists()) {
+            throw new GradleException('build the launcher first: powershell -File launcher/build.ps1')
+        }
+        def dir = file("${buildDir}/resources/main/assets/suspiciousspeculars")
+        dir.mkdirs()
+        def dst = new File(dir, 'launcher.jar')
+        dst.bytes = src.bytes
+        def digest = java.security.MessageDigest.getInstance('SHA-256').digest(dst.bytes)
+        new File(dir, 'launcher.version').text = digest.encodeHex().toString() + '\n'
+        println "launcher resource: ${dst.length()} B  ${digest.encodeHex().toString().substring(0, 8)}"
+    }
+}
+
+copyBundle.dependsOn processResources
+copyLauncher.dependsOn processResources
+jar.dependsOn copyBundle, copyLauncher
+
+jar {
+    manifest {
+        attributes(
+            'Implementation-Title': 'Suspicious Speculars',
+            'Implementation-Version': version,
+            // The early half: this class runs at coremod discovery, before FML constructs any mod,
+            // and hands over to the launcher window (Forge 1.12 builds mods in mod-id order, so a
+            // normal pre-init hand-over waits ~70 s behind 200 other mods). It is deliberately
+            // self-contained; see its class comment for why sharing classes with the mod half once
+            // produced NoClassDefFoundError.
+            'FMLCorePlugin': 'suspiciousspeculars.SuspiciousCorePlugin',
+            'FMLCorePluginContainsFMLMod': 'true'
+        )
+    }
+    // the next build gets the next number; only a jar that was actually written advances it
+    doLast {
+        buildNumberFile.text = nextBuild.toString()
+    }
+}

@@ -1,0 +1,20 @@
+[
+{
+  "modid": "suspiciousspeculars",
+  "name": "Suspicious Speculars",
+  "description": "Installs and maintains the Suspicious Speculars shader pack for SuperSymmetry: patches Eclipse e89e6c6 into a PBR pack of its own and merges the matching resource pack.",
+  "version": "${version}",
+  "mcversion": "1.12.2",
+  "url": "https://github.com/NeoRussia/suspicious-speculars",
+  "updateJSON": "",
+  "authorList": ["NeoRussia"],
+  "credits": "Patches Merlin1809's Eclipse shader pack. Requires Demonica and Cleanroom.",
+  "logoFile": "",
+  "screenshots": [],
+  "parent": "",
+  "useDependencyInformation": true,
+  "requiredMods": [],
+  "dependencies": [],
+  "useMCVersion": true
+}
+]

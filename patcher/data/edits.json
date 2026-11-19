@@ -1,0 +1,3265 @@
+{
+ "schema": 3,
+ "base": {
+  "name": "Eclipse e89e6c6",
+  "detect": {
+   "file": "shaders/lang/en_us.lang",
+   "contains": "ECLIPSE"
+  }
+ },
+ "edits": [
+  {
+   "file": "shaders/dimensions/DH_translucent.fsh",
+   "sha256": "4ff17fd558e2f94ca51c640bc0984f0bcfd4afc86165124e2194e65697bb995d",
+   "ops": [
+    {
+     "line": 168,
+     "delete": 0,
+     "insert": [
+      "#ifndef FORWARD_SSR_QUALITY"
+     ]
+    },
+    {
+     "line": 169,
+     "delete": 0,
+     "insert": [
+      "#endif"
+     ]
+    },
+    {
+     "line": 519,
+     "delete": 0,
+     "insert": [
+      ""
+     ]
+    }
+   ]
+  },
+  {
+   "file": "shaders/dimensions/all_particles.fsh",
+   "sha256": "485065b0641a8cb3049f1d13a5f373da29614bf488d3e2af8908ca8d2906a4a8",
+   "ops": [
+    {
+     "line": 498,
+     "delete": 1,
+     "insert": [
+      "\t\t\t\tvec3 Indirect_lighting = doBlockLightLighting(vec3(TORCH_R,TORCH_G,TORCH_B), lightmap.x, feetPlayerPos, lpvPos, vec3(0.0), false, false);"
+     ]
+    },
+    {
+     "line": 598,
+     "delete": 1,
+     "insert": [
+      "\t\tIndirect_lighting += doBlockLightLighting( vec3(TORCH_R,TORCH_G,TORCH_B), lightmap.x, feetPlayerPos, lpvPos, vec3(0.0), false, true);"
+     ]
+    }
+   ]
+  },
+  {
+   "file": "shaders/dimensions/all_solid.fsh",
+   "sha256": "f7579691b1c05ff50acfe260345fae403706e5a5387547850872bb99066dcdc5",
+   "ops": [
+    {
+     "line": 1045,
+     "delete": 1,
+     "insert": [
+      "",
+      "\t\t// SUSY: glowing ores. GT and SUSY ores are one block per material (gregtech:ore_<material>), far too",
+      "\t\t// many to list in block.properties, so their textures carry marker 244 instead and the shader's",
+      "\t\t// EMISSIVE_ORES setting decides whether they glow. Placed after the emissive branches so the",
+      "\t\t// setting, not the texture's own alpha, is what controls it.",
+      "\t\tif (abs(SpecularTex.b - 244.0/255.0) < 0.004) {",
+      "\t\t\t#if EMISSIVE_ORES > 0",
+      "\t\t\t\t// Alpha 1.0 is Eclipse's \"no emission data\" sentinel (Emission() checks",
+      "\t\t\t\t// `Emission < 254.5/255`), so the setting must never reach it - a shipped default of",
+      "\t\t\t\t// 1.0 silently switched every ore off. Clamp, then glow the specks and not the rock",
+      "\t\t\t\t// around them: getEmission() is the shader's own key on saturation and brightness,",
+      "\t\t\t\t// here steepened so the specks stand out. ORE_GLOW_FLOOR keeps metal ores whose",
+      "\t\t\t\t// specks are nearly grey from vanishing; raise it if an ore reads too dark.",
+      "\t\t\t\tconst float ORE_GLOW_FLOOR = 0.03;",
+      "\t\t\t\tfloat oreMask = clamp(getEmission(Albedo.rgb) * 3.0, ORE_GLOW_FLOOR, 1.0);",
+      "\t\t\t\tOutSpecular.a = min(EMISSIVE_ORES_STRENGTH, 250.0/255.0) * oreMask;",
+      "\t\t\t#else",
+      "\t\t\t\tOutSpecular.a = 0.0;",
+      "\t\t\t#endif",
+      "\t\t}",
+      "",
+      "\t\t// SUSY: material markers. Blue >= 246 is not a porosity or SSS amount, it is an effect id",
+      "\t\t// written by the specular generators (250 thin film, 249 dispersion, 248 clearcoat,",
+      "\t\t// 247 anisotropic, 246 sparkle). Pass it through unchanged; composite1.fsh decodes it.",
+      "\t\tif (SpecularTex.b >= 241.5/255.0) OutSpecular.b = SpecularTex.b;",
+      "",
+      "\t\t// SUSY: GregTech pipes are drawn by GregTech's own block renderers, and those draws never",
+      "\t\t// resolve a specular sprite for their surfaces - every value in their _s maps is inert (proved",
+      "\t\t// with a marker probe: pipe pixels never reached the material pass). Their block id does reach",
+      "\t\t// the shader, so give the pipes their material from block.properties 701-705 instead.",
+      "\t\tif (data_in.blockID >= 701 && data_in.blockID <= 705) {",
+      "\t\t\t// Wood pipes share these blocks with the metal ones and differ only by sprite. The wood",
+      "\t\t\t// sprites are the dark planks (texel luma ~0.47); the metal ones are bright grey 0.57-0.90",
+      "\t\t\t// and take their colour from a vertex tint. Sampling the texture without the tint therefore",
+      "\t\t\t// separates them, and wood is left alone so it keeps its matte look.",
+      "\t\t\tfloat pipeTexelLuma = luma(texture(gtexture, data_in.lmtexcoord.xy).rgb);",
+      "\t\t\tif (pipeTexelLuma > 0.53) {",
+      "\t\t\t\t// F0 stays in the coloured dielectric band: below the metal cut-off the reflection is",
+      "\t\t\t\t// white, and a high F0 turns a coloured pipe into a grey one.",
+      "\t\t\t\tOutSpecular.rg = vec2(190.0, 238.0) / 255.0; // metal, same family as the casings: F0 above the cut-off keeps the pipe's tint",
+      "\t\t\t\t// LD shells are the polished ones: dispersion fringe, the rest stay plain.",
+      "\t\t\tOutSpecular.b = 0.0; // no effect marker: dispersion read as speckle on the LD shells",
+      "\t\t\t}",
+      "\t\t}",
+      "",
+      "\t\t// SUSY: energy flow, only on conduits that carry something: laser and optical pipes. A",
+      "\t\t// travelling band from the surface texture coordinate.",
+      "\t\tif (data_in.blockID == 705) {",
+      "\t\t\tfloat flowPhase = (data_in.lmtexcoord.x + data_in.lmtexcoord.y) * 9.0 - frameTimeCounter * 3.0;",
+      "\t\t\tfloat flowBand = pow(max(sin(flowPhase), 0.0), 6.0);",
+      "\t\t\tOutSpecular.a = max(OutSpecular.a, flowBand * 0.9);",
+      "\t\t}"
+     ]
+    },
+    {
+     "line": 1102,
+     "delete": 0,
+     "insert": [
+      ""
+     ]
+    }
+   ]
+  },
+  {
+   "file": "shaders/dimensions/all_translucent.fsh",
+   "sha256": "a785643b091ff4e28b4cbda641ebc7a47d94e476cb0f8038908dff83a4ebf5f1",
+   "ops": [
+    {
+     "line": 90,
+     "delete": 0,
+     "insert": [
+      "uniform sampler2D colortex1; // opaque albedo + material, read by the reflection tap test"
+     ]
+    },
+    {
+     "line": 193,
+     "delete": 0,
+     "insert": [
+      "#ifndef FORWARD_SSR_QUALITY"
+     ]
+    },
+    {
+     "line": 194,
+     "delete": 0,
+     "insert": [
+      "#endif"
+     ]
+    },
+    {
+     "line": 931,
+     "delete": 1,
+     "insert": [
+      "\t// SUSY: .rgba rather than .rga so the blue marker channel survives here too (fluids carry the",
+      "\t// thin-film flag for oil and natural gas).",
+      "\tvec4 SpecularTex = texture(specular, lmtexcoord.xy, mipmapBias).rgba;"
+     ]
+    },
+    {
+     "line": 1092,
+     "delete": 1,
+     "insert": [
+      "\t\tIndirect_lighting += doBlockLightLighting(lightColor, lightmap.x, feetPlayerPos, lpvPos, worldSpaceNormal, viewPos, false, BN, worldSpaceNormal, false, glowframe, false);"
+     ]
+    },
+    {
+     "line": 1094,
+     "delete": 1,
+     "insert": [
+      "\t\tIndirect_lighting += doBlockLightLighting(lightColor, lightmap.x, feetPlayerPos, lpvPos, worldSpaceNormal, glowframe, false);"
+     ]
+    },
+    {
+     "line": 1111,
+     "delete": 1,
+     "insert": [
+      "\t\tEmission(FinalColor, Albedo, SpecularTex.a); // alpha is the emission; .b is now the marker"
+     ]
+    },
+    {
+     "line": 1167,
+     "delete": 1,
+     "insert": [
+      "\t\t\t// SUSY: dispersion on translucents (glaxx). Only this channel is decoded here: sparkle,",
+      "\t\t\t// clearcoat and anisotropic stay off, so glass maps that already carry a marker (the",
+      "\t\t\t// transparent casing's 248) keep behaving exactly as they did.",
+      "\t\t\tfloat translucentEffect = SpecularTex.b * 255.0;",
+      "\t\t\tfloat translucentDispersion = (translucentEffect > 251.5 && translucentEffect < 252.5) ? 0.5",
+      "\t\t\t                            : ((translucentEffect > 248.5 && translucentEffect < 249.5) ? 1.0",
+      "\t\t\t                            : ((translucentEffect > 244.5 && translucentEffect < 245.5) ? 0.35 : 0.0));",
+      "\t\t\tvec3 specularReflections = specularReflections(viewPos, shadowPlayerPos, normalize(feetPlayerPos), sunVec, vec2(BN, interleaved_gradientNoise_temporal()), flatWorldNormal, worldSpaceNormal, roughness, f0, Albedo, FinalColor*gl_FragData[0].a, DirectLightColor * Shadows * Shadows, lightmap.y, isHand, isWater, reflectance, flashLightSpecularData, ((SpecularTex.b * 255.0) >= 250.5 && (SpecularTex.b * 255.0) < 251.5) ? 0.25 : (((SpecularTex.b * 255.0) >= 249.5 && (SpecularTex.b * 255.0) < 250.5) ? 1.0 : 0.0), vec4(0.0, 0.0, 0.0, translucentDispersion));"
+     ]
+    },
+    {
+     "line": 1239,
+     "delete": 0,
+     "insert": [
+      ""
+     ]
+    }
+   ]
+  },
+  {
+   "file": "shaders/dimensions/composite.fsh",
+   "sha256": "6576a5aad05b585ae971235c4bdfa99d1694500f5a7ab1ee82c497f1c8da1a5a",
+   "ops": [
+    {
+     "line": 81,
+     "delete": 0,
+     "insert": [
+      "#ifndef DEFERRED_SSR_QUALITY"
+     ]
+    },
+    {
+     "line": 82,
+     "delete": 0,
+     "insert": [
+      "#endif"
+     ]
+    },
+    {
+     "line": 516,
+     "delete": 0,
+     "insert": [
+      "\t\t// SUSY: 250/255 in the blue channel is the prismatic marker, not an SSS amount, so it must",
+      "\t\t// not widen the shadow filter here either (see all_solid.fsh / composite1.fsh).",
+      "\t\tif (SpecularTex.z > 0.96) LabSSS = 0.0;"
+     ]
+    },
+    {
+     "line": 630,
+     "delete": 0,
+     "insert": [
+      ""
+     ]
+    }
+   ]
+  },
+  {
+   "file": "shaders/dimensions/composite1.fsh",
+   "sha256": "6c17266d78f47ff0705b6221ecf8b7d5b4cb1a982d0a51cc297ed33198295012",
+   "ops": [
+    {
+     "line": 231,
+     "delete": 0,
+     "insert": [
+      "#ifndef DEFERRED_SSR_QUALITY"
+     ]
+    },
+    {
+     "line": 232,
+     "delete": 0,
+     "insert": [
+      "#endif"
+     ]
+    },
+    {
+     "line": 1103,
+     "delete": 0,
+     "insert": [
+      "\t\t// SUSY: 250/255 in the blue channel is not an SSS amount, it is a material marker set by",
+      "\t\t// all_solid.fsh (250 thin film, 249 dispersion, 248 clearcoat, 247 anisotropic, 246 sparkle,",
+      "\t\t// 245 sparkle + partial dispersion). Take it out of the SSS range and hand the id to the",
+      "\t\t// specular pass.",
+      "\t\tfloat effectValue = SpecularTex.z * 255.0;",
+      "\t\t// 250 is a full thin film; 251 the same film at reduced strength, used for oil and gas sheets",
+      "\t\t// where a rainbow that strong reads as a soap bubble rather than an oil slick. 0.15 is a faint sheen.",
+      "\t\tfloat prismaticAmount = (effectValue >= 250.5 && effectValue < 251.5) ? 0.25 : ((effectValue >= 249.5 && effectValue < 250.5) ? 1.0 : 0.0); // 251 = oil/gas, 250 = full",
+      "\t\tvec4 materialEffects = vec4(",
+      "\t\t\t\t(effectValue > 242.5 && effectValue < 243.5) ? 0.6 : ((effectValue > 243.5 && effectValue < 246.5) ? 1.5 : 0.0), // x: sparkle (243 quartz 0.6, 244 ores + glow, 245 + partial dispersion, 246 speckle only)",
+      "\t\t\t\t(effectValue > 246.5 && effectValue < 247.5) ? 1.0 : 0.0,  // y: anisotropic",
+      "\t\t\t\t((effectValue > 247.5 && effectValue < 248.5) || (effectValue > 241.5 && effectValue < 242.5)) ? 1.0 : 0.0, // z: clearcoat (242 = bronze/brass too)",
+      "\t\t\t\t(effectValue > 248.5 && effectValue < 249.5) ? 1.0 : ((effectValue > 241.5 && effectValue < 242.5) ? 0.16 : ((effectValue > 244.5 && effectValue < 245.5) ? 0.35 : ((effectValue > 251.5 && effectValue < 252.5) ? 0.5 : 0.0)))); // w: dispersion (faint on bronze/brass, 0.35 on 245)",
+      "\t\tif (effectValue > 241.5) LabSSS = 0.0;",
+      ""
+     ]
+    },
+    {
+     "line": 1567,
+     "delete": 0,
+     "insert": [
+      "",
+      "\t\t\t#ifdef UNDERGROUND_DIM",
+      "\t\t\t\t// SUSY: enclosed dimension. This ambient is scattered haze, and the nether's warm",
+      "\t\t\t\t// ash tint makes bare rock look heated; push it cold. Torch and lava light are added",
+      "\t\t\t\t// later by the LPV, so they keep their own colour against it.",
+      "\t\t\t\tIndirect_lighting *= vec3(0.70, 0.72, 0.78);",
+      "\t\t\t\tAmbientLightColor = Indirect_lighting;",
+      "\t\t\t#endif"
+     ]
+    },
+    {
+     "line": 1593,
+     "delete": 1,
+     "insert": [
+      "\t\t\t// SUSY: partial blocks. The floodfill has one voxel per block, so a block",
+      "\t\t\t// that is only partly solid (slab, stair, wall, any shaped block such as",
+      "\t\t\t// ArchitectureCraft) still marks its whole voxel occupied, and light in that",
+      "\t\t\t// voxel is zero. The stock offset is half a block measured from the face: for",
+      "\t\t\t// a face inset inside its block it lands on or inside that occupied voxel and",
+      "\t\t\t// the face goes dark in patches. Add the face's own inset, so the sample",
+      "\t\t\t// always clears the block boundary by half a voxel.",
+      "\t\t\t//",
+      "\t\t\t// The inset must be measured in the block the face belongs to, so step a",
+      "\t\t\t// little way back along the normal first. At an exact block boundary the",
+      "\t\t\t// fragment itself floors into the adjoining (air) block, which reports a full",
+      "\t\t\t// block of inset; sampling a whole block too far on every ordinary wall face",
+      "\t\t\t// is what produced the shimmer before this step existed.",
+      "\t\t\tvec3 lpvBase = GetLpvPosition(feetPlayerPos);",
+      "\t\t\tvec3 blockFrac = fract(lpvBase - 0.05 * FlatNormals);",
+      "\t\t\tvec3 distToEdge = mix(blockFrac, 1.0 - blockFrac, step(0.0, FlatNormals));",
+      "\t\t\tfloat faceInset = clamp(dot(abs(FlatNormals), distToEdge), 0.0, 0.75);",
+      "\t\t\tnormalOffset += faceInset * FlatNormals;",
+      "",
+      "\t\t\tvec3 lpvPos = lpvBase + normalOffset;"
+     ]
+    },
+    {
+     "line": 1598,
+     "delete": 1,
+     "insert": [
+      "\t\tvec3 blockLightColor = doBlockLightLighting(vec3(TORCH_R,TORCH_G,TORCH_B), lightmap.x, feetPlayerPos, lpvPos, FlatNormals, viewPos, isDHrange, blueNoise(), FlatNormals, hand, glowframe, opaqueParticles);"
+     ]
+    },
+    {
+     "line": 1719,
+     "delete": 1,
+     "insert": [
+      "\t\t\tFINAL_COLOR = specularReflections(viewPos, feetPlayerPos, feetPlayerPos_normalized, WsunVec, specularNoises, FlatNormals, specularNormal, SpecularTex.r, SpecularTex.g, albedo, FINAL_COLOR, DirectLightColor*shadowColor*shadowColor, lightmap.y, hand, reflections, SunReflectionAlpha, isShaderGrass, flashLightSpecularData, prismaticAmount, materialEffects);"
+     ]
+    },
+    {
+     "line": 1738,
+     "delete": 1,
+     "insert": [
+      "\t\t\t#if RESOURCEPACK_SKY == 1 || RESOURCEPACK_SKY == 0 || RESOURCEPACK_SKY == 3 || defined PLANET_MOON"
+     ]
+    },
+    {
+     "line": 1742,
+     "delete": 1,
+     "insert": [
+      "\t\t\t\t#if RESOURCEPACK_SKY == 0 || RESOURCEPACK_SKY == 3 || defined PLANET_MOON"
+     ]
+    },
+    {
+     "line": 1751,
+     "delete": 1,
+     "insert": [
+      "\t\t\t\t\t\t#ifdef PLANET_MOON",
+      "\t\t\t\t\t\t\t// SUSY: no atmosphere to hide them and no night to wait for - in vacuum",
+      "\t\t\t\t\t\t\t// stars are visible beside the sun, so skip the \"only when the sun is",
+      "\t\t\t\t\t\t\t// down\" fade entirely.",
+      "\t\t\t\t\t\t\tBackground += stars * starColor;",
+      "\t\t\t\t\t\t#else",
+      "\t\t\t\t\t\t\tBackground += stars * starColor * mix(clamp(-unsigned_WsunVec.y*2.0,0.0,1.0), 1.0, clamp(cameraPosition.y-15000.0, 0.0, 45000.0)/45000.0);",
+      "\t\t\t\t\t\t#endif"
+     ]
+    },
+    {
+     "line": 1863,
+     "delete": 0,
+     "insert": [
+      "\t\t\t\t#ifndef PLANET_MOON"
+     ]
+    },
+    {
+     "line": 1864,
+     "delete": 0,
+     "insert": [
+      "\t\t\t#endif"
+     ]
+    },
+    {
+     "line": 1872,
+     "delete": 1,
+     "insert": [
+      "\t\t\t\t// SUSY: the 50x lift exists to push a dim skybox into bloom range, but it clips bright",
+      "\t\t\t\t// bodies (Earth, the sun) to white. Exposed as a macro so airless dimensions can use a",
+      "\t\t\t\t// value that keeps their detail.",
+      "\t\t\t\t#ifndef RESOURCEPACK_SKY_BOOST",
+      "\t\t\t\t\t#define RESOURCEPACK_SKY_BOOST 50.0",
+      "\t\t\t\t#endif",
+      "\t\t\t\tvec3 resourcePackskyBox = skyboxCol * RESOURCEPACK_SKY_BOOST * clamp(unsigned_WsunVec.y*255.0,0.1,1.0);"
+     ]
+    },
+    {
+     "line": 1941,
+     "delete": 0,
+     "insert": [
+      ""
+     ]
+    }
+   ]
+  },
+  {
+   "file": "shaders/dimensions/composite11.fsh",
+   "sha256": "c6be6ce08c7248072b6cd49ccf56a8cd0794c58f282a4c616108f8d1b273512f",
+   "ops": [
+    {
+     "line": 220,
+     "delete": 0,
+     "insert": [
+      "\t// SUSY: if the exposure buffer ever holds NaN/Inf/0 the whole world goes black while the HUD still",
+      "\t// draws, and nothing recovers it except a shader reload. Keep the consumer safe as well as the",
+      "\t// producer (dimensions/deferred.csh).",
+      "\tif (any(isnan(exposure.rgb)) || any(isinf(exposure.rgb)) || any(lessThanEqual(exposure.rgb, vec3(0.0)))) exposure.rgb = vec3(1.0);"
+     ]
+    },
+    {
+     "line": 225,
+     "delete": 0,
+     "insert": [
+      "\t\t#ifdef UNDERGROUND_DIM",
+      "\t\t\t// SUSY: depthtex1 can read 0 for a pixel or a frame (buffer not yet written). The",
+      "\t\t\t// circle-of-confusion below divides by z, and a zero gives inf/NaN, which the bokeh loop",
+      "\t\t\t// then samples as black - a whole-screen blackout that lasts until the pipeline is",
+      "\t\t\t// rebuilt. A harmless floor removes that failure mode.",
+      "\t\t\tz = max(z, 0.05);",
+      "\t\t#endif"
+     ]
+    },
+    {
+     "line": 234,
+     "delete": 1,
+     "insert": [
+      "\t\t#if defined FAR_BLUR_ONLY || defined UG_FAR_BLUR_ONLY"
+     ]
+    }
+   ]
+  },
+  {
+   "file": "shaders/dimensions/composite12.fsh",
+   "sha256": "7f3230cc624b34fd6e966190743ecfe0fce056f7376ee6c4789c651511772a7b",
+   "ops": [
+    {
+     "line": 179,
+     "delete": 0,
+     "insert": [
+      "",
+      "#ifdef UNDERGROUND_DIM",
+      "// SUSY: enclosed dimension. Two steps, in this order:",
+      "//  1. peel the last 1/255 of dither off the bottom, so pure black stays pure without eating the",
+      "//     haze - the fog in-scatter is a few times this floor, so it survives while dust does not;",
+      "//  2. cool the darks much more than the lights, so bare stone reads cold while torches, lamps and",
+      "//     lava keep their warm colour. Weights are display-space luma, which is what this pass works in.",
+      "color = max(color - 0.003, 0.0);",
+      "color *= mix(vec3(0.86, 0.95, 1.16), vec3(1.0), smoothstep(0.05, 0.55, luma(color)));",
+      "#endif"
+     ]
+    }
+   ]
+  },
+  {
+   "file": "shaders/dimensions/composite2.fsh",
+   "sha256": "98df4ed4f1c918a108f7386063cdac16089a56b43b3aa3bfd2e730ff6091ae27",
+   "ops": [
+    {
+     "line": 11,
+     "delete": 0,
+     "insert": [
+      "#ifndef DEFERRED_SSR_QUALITY"
+     ]
+    },
+    {
+     "line": 12,
+     "delete": 0,
+     "insert": [
+      "#endif"
+     ]
+    },
+    {
+     "line": 600,
+     "delete": 0,
+     "insert": [
+      ""
+     ]
+    }
+   ]
+  },
+  {
+   "file": "shaders/dimensions/composite4.fsh",
+   "sha256": "2784bc88e96b785790e678fde9a9dd029c83712018dc3be4b69777f2d0b0a5ec",
+   "ops": [
+    {
+     "line": 871,
+     "delete": 1,
+     "insert": [
+      "  // SUSY: at a forward-rendered translucent pixel, the volumetrics sampled here are",
+      "  // the sky's: composite3 filled colortex0 with the whole cloud field, because the",
+      "  // depth this pass reads is the one behind the pane, not the pane itself. Adding it",
+      "  // after blendForwardRendering() overwrote the glass, so the pane vanished exactly",
+      "  // where a cloud sat behind it. The volumetrics behind a translucent surface are",
+      "  // already composited above (VLBehindTranslucents, before the tint and the forward",
+      "  // blend), so skip the second application for everything except water.",
+      "  bool translucentSurface = TranslucentShader.a > 0.0000011 && !isWater;",
+      "  vec4 surfaceVolumetrics = translucentSurface ? vec4(0.0, 0.0, 0.0, 1.0) : temporallyFilteredVL;",
+      "  blendAllFogTypes(color, bloomyFogMult, surfaceVolumetrics, linearDistance, playerPos_normalized, cameraPosition, isSky, isLightning);"
+     ]
+    }
+   ]
+  },
+  {
+   "file": "shaders/dimensions/composite6.fsh",
+   "sha256": "100b8b3a830d6f7ecc02baa566accf59623a67ed4b99690cf998c2a61596edd8",
+   "ops": [
+    {
+     "line": 21,
+     "delete": 1,
+     "insert": [
+      "const int colortex13Format = RGBA16F;"
+     ]
+    },
+    {
+     "line": 467,
+     "delete": 0,
+     "insert": [
+      ""
+     ]
+    }
+   ]
+  },
+  {
+   "file": "shaders/dimensions/deferred.csh",
+   "sha256": "79659679f71831177f529b59a5b2f9b6818507152fd2b84127839acdf5c03fb8",
+   "ops": [
+    {
+     "line": 42,
+     "delete": 2,
+     "insert": [
+      "\t\t\t// SUSY: one NaN or zero pixel in this buffer used to poison the temporal average for good -",
+      "\t\t\t// log(0) is -inf, log(NaN) is NaN, and mix(x, avgB, 0.95) never lets it decay. The result",
+      "\t\t\t// was a fully black world (exposure NaN) that stayed until the SSBOs were reset by a shader",
+      "\t\t\t// reload. The R2 sequence picks 50 new points per frame, so any bad region is sampled within",
+      "\t\t\t// seconds, which is why it looked intermittent. `!(x > 0.0)` is the NaN-safe test.",
+      "\t\t\tfloat sampleLuma = luma(sp);",
+      "\t\t\tif (!(sampleLuma > 0.0)) sampleLuma = 1e-6;",
+      "\t\t\tavgExp += log(sqrt(sampleLuma));",
+      "\t\t\tfloat sampleB = min(dot(sp,vec3(0.07,0.22,0.71)),8e-2);",
+      "\t\t\tif (!(sampleB > 0.0)) sampleB = 1e-6;",
+      "\t\t\tavgB += log(sampleB);"
+     ]
+    },
+    {
+     "line": 50,
+     "delete": 0,
+     "insert": [
+      "\t// SUSY: clamp() does not clean a NaN, so a poisoned temporal value would survive every frame.",
+      "\tif (!(avgBrightness > 0.0)) avgBrightness = 0.5;"
+     ]
+    },
+    {
+     "line": 60,
+     "delete": 0,
+     "insert": [
+      "\tif (!(avgL2 > 0.0)) avgL2 = 0.5;"
+     ]
+    },
+    {
+     "line": 76,
+     "delete": 0,
+     "insert": [
+      "\t// SUSY: last line of defence. A NaN or zero here multiplies the whole frame to black, and it is",
+      "\t// what the HUD staying visible while the world goes dark points at.",
+      "\tif (!(centerDepth >= 0.0)) centerDepth = 0.0;",
+      "\tif (!(exposure > 0.0)) exposure = Manual_exposure_value;",
+      "\texposure = clamp(exposure, 1e-4, 100.0);",
+      ""
+     ]
+    }
+   ]
+  },
+  {
+   "file": "shaders/dimensions/deferred2.fsh",
+   "sha256": "799c745412cb46c7a53cc1da1e57a081c1c9f2b45dd500fe732de4121f9fbce2",
+   "ops": [
+    {
+     "line": 53,
+     "delete": 1,
+     "insert": []
+    },
+    {
+     "line": 61,
+     "delete": 1,
+     "insert": []
+    }
+   ]
+  },
+  {
+   "file": "shaders/dimensions/setup.csh",
+   "sha256": "4764d9b773d93af74c3ce470923287138f4693e7427061ae16b8ff617bcf9daa",
+   "ops": [
+    {
+     "line": 956,
+     "delete": 0,
+     "insert": [
+      "            case BLOCK_ICE:",
+      "                // clear, like glass: ice and frosted ice both land on this id",
+      "                tintColor = vec3(1.0);",
+      "                mixWeight = 1.0;",
+      "                break;"
+     ]
+    },
+    {
+     "line": 1202,
+     "delete": 0,
+     "insert": [
+      "        // SUSY: stained glass tints, does not dim. The propagation spends one full step",
+      "        // per solid voxel (mixNeighbours divides by 6) and then multiplies by the tint,",
+      "        // so a saturated tint reads as \"blocks most of the light\". Bias it toward white",
+      "        // to keep the hue but hand the brightness back.",
+      "        if (blockId >= BLOCK_GLASS && blockId <= BLOCK_GLASS_YELLOW) {",
+      "            tintColor = mix(vec3(1.0), tintColor, 0.35);",
+      "        }"
+     ]
+    }
+   ]
+  },
+  {
+   "file": "shaders/dimensions/voxy_translucent.glsl",
+   "sha256": "138c984502529fb069d07e26a27c23c62f21bc78272ad25ac777ab2433478ede",
+   "ops": [
+    {
+     "line": 110,
+     "delete": 0,
+     "insert": [
+      "#ifndef FORWARD_SSR_QUALITY"
+     ]
+    },
+    {
+     "line": 111,
+     "delete": 0,
+     "insert": [
+      "#endif"
+     ]
+    },
+    {
+     "line": 301,
+     "delete": 1,
+     "insert": [
+      "\tIndirect_lighting += doBlockLightLighting(lightColor, lightmap.x * 0.8, feetPlayerPos, lpvPos, vec3(0.0), false, false);"
+     ]
+    },
+    {
+     "line": 393,
+     "delete": 0,
+     "insert": [
+      ""
+     ]
+    }
+   ]
+  },
+  {
+   "file": "shaders/lang/en_us.lang",
+   "sha256": "1b544b169e2ca9c3e3a7c63a909f24572d6457d9c5afc5020de3cf7621ab1924",
+   "ops": [
+    {
+     "line": 1327,
+     "delete": 0,
+     "insert": [
+      "profile.SUSY=§bSUSY",
+      ".SUSY=§bSUSY",
+      ""
+     ]
+    }
+   ]
+  },
+  {
+   "file": "shaders/lib/diffuse_lighting.glsl",
+   "sha256": "c9fbcec72f97b17899c2037a52928b4adce6bdd7a957a52aa7ea76260193a3e1",
+   "ops": [
+    {
+     "line": 105,
+     "delete": 1,
+     "insert": [
+      "    vec3 playerPos, vec3 lpvPos, vec3 lpvNormal"
+     ]
+    },
+    {
+     "line": 126,
+     "delete": 0,
+     "insert": [
+      "",
+      "        // SUSY: partial blocks. The floodfill spends one full voxel per block, so a",
+      "        // block that is only partly solid (slab, stair, thin panel, shaped block such",
+      "        // as ArchitectureCraft) leaves its voxel dark, and a surface that samples that",
+      "        // voxel goes hard black: the patch under a thin panel, the dark part of a",
+      "        // sloped face. Walk further out along the face normal and keep the brightest.",
+      "        // The taps only ever go outward, so light cannot bleed through a wall, and",
+      "        // taking the max means this can never darken anything that was already lit.",
+      "        if (dot(lpvNormal, lpvNormal) > 1.0e-6) {",
+      "            vec3 outward = normalize(lpvNormal);",
+      "            lpvSample = max(lpvSample, SampleLpvLinear(lpvPos + outward));",
+      "            lpvSample = max(lpvSample, SampleLpvLinear(lpvPos + outward * 1.75));",
+      "        }"
+     ]
+    },
+    {
+     "line": 302,
+     "delete": 1,
+     "insert": [
+      "    indirectLight += mix(minimumLightColor * (MIN_LIGHT_AMOUNT * 0.004 + nightVision*0.30), minimumLightColor * (MIN_LIGHT_AMOUNT_INSIDE * 0.004 + nightVision*0.30), 1.0-lightmap);"
+     ]
+    }
+   ]
+  },
+  {
+   "file": "shaders/lib/nether_fog.glsl",
+   "sha256": "af4fec3306cea788728717dd6523693c89e2f7a5ad8351a3649b057df9a2d794",
+   "ops": [
+    {
+     "line": 66,
+     "delete": 0,
+     "insert": [
+      "#ifdef UNDERGROUND_DIM",
+      "// SUSY: The Beneath reports a black fog colour, and a warm haze would read as the nether rather",
+      "// than as bare stone. A cold, very dark grey keeps the distance neutral.",
+      "hazeColor = vec3(0.048, 0.055, 0.068);",
+      "#endif",
+      ""
+     ]
+    }
+   ]
+  },
+  {
+   "file": "shaders/lib/settings.glsl",
+   "sha256": "bc956beb6470efd057f2f2a0797607db1b9cadcb3180299ebe032643d26a3269",
+   "ops": [
+    {
+     "line": 108,
+     "delete": 2,
+     "insert": [
+      "#define TORCH_G 0.75 // [0.01 0.02 0.03 0.04 0.05 0.06 0.07 0.08 0.09 0.1 0.11 0.12 0.13 0.14 0.15 0.16 0.17 0.18 0.19 0.2 0.21 0.22 0.23 0.24 0.25 0.26 0.27 0.28 0.29 0.3 0.31 0.32 0.33 0.34 0.35 0.36 0.37 0.38 0.39 0.4 0.41 0.42 0.43 0.44 0.45 0.46 0.47 0.48 0.49 0.5 0.51 0.52 0.53 0.54 0.55 0.56 0.57 0.58 0.59 0.6 0.61 0.62 0.63 0.64 0.65 0.66 0.67 0.68 0.69 0.7 0.71 0.72 0.73 0.74 0.75 0.76 0.77 0.78 0.79 0.8 0.81 0.82 0.83 0.84 0.85 0.86 0.87 0.88 0.89 0.9 0.91 0.92 0.93 0.94 0.95 0.96 0.97 0.98 0.99 1.0]",
+      "#define TORCH_B 0.57 // [0.01 0.02 0.03 0.04 0.05 0.06 0.07 0.08 0.09 0.1 0.11 0.12 0.13 0.14 0.15 0.16 0.17 0.18 0.19 0.2 0.21 0.22 0.23 0.24 0.25 0.26 0.27 0.28 0.29 0.3 0.31 0.32 0.33 0.34 0.35 0.36 0.37 0.38 0.39 0.4 0.41 0.42 0.43 0.44 0.45 0.46 0.47 0.48 0.49 0.5 0.51 0.52 0.53 0.54 0.55 0.56 0.57 0.58 0.59 0.6 0.61 0.62 0.63 0.64 0.65 0.66 0.67 0.68 0.69 0.7 0.71 0.72 0.73 0.74 0.75 0.76 0.77 0.78 0.79 0.8 0.81 0.82 0.83 0.84 0.85 0.86 0.87 0.88 0.89 0.9 0.91 0.92 0.93 0.94 0.95 0.96 0.97 0.98 0.99 1.0]"
+     ]
+    },
+    {
+     "line": 176,
+     "delete": 1,
+     "insert": [
+      "#define TRANSLUCENT_COLORED_SHADOWS"
+     ]
+    },
+    {
+     "line": 726,
+     "delete": 1,
+     "insert": [
+      "// SUSY: aperture = focal/fstop is a const evaluated here, so a later fstop or aperture override",
+      "// would come too late. Scale it instead: 1.0 is the pack's own strength, lower is subtler.",
+      "#ifdef UNDERGROUND_DIM",
+      "    #define DOF_APERTURE_SCALE 0.35",
+      "#else",
+      "    #define DOF_APERTURE_SCALE 1.0",
+      "#endif",
+      "const float aperture = focal/fstop * DOF_APERTURE_SCALE;"
+     ]
+    },
+    {
+     "line": 791,
+     "delete": 1,
+     "insert": [
+      "#define EMISSIVE_ORES 1 // [0 1 2]"
+     ]
+    },
+    {
+     "line": 795,
+     "delete": 1,
+     "insert": [
+      "#define EMISSIVE_TRIMS_STRENGTH 1.0 // [0.1 0.2 0.3 0.4 0.5 0.6 0.7 0.8 0.9 1.0]"
+     ]
+    },
+    {
+     "line": 1103,
+     "delete": 1,
+     "insert": [
+      "// SUSY: LOD terrain must not appear in reflections. Its hits reproject through the",
+      "// DH projection and then sample the main screen buffer, which is how the hand, the",
+      "// HUD outline and low-detail far terrain ended up mirrored. Without this define the",
+      "// reflection march has no DH path at all: rays that pass the real chunks simply find",
+      "// nothing, and those surfaces fall back to the sky/background reflection.",
+      "// #define DH_SCREENSPACE_REFLECTIONS"
+     ]
+    },
+    {
+     "line": 1127,
+     "delete": 1,
+     "insert": [
+      "#define LPV_COLORED_CANDLES"
+     ]
+    },
+    {
+     "line": 1396,
+     "delete": 0,
+     "insert": [
+      "// SUSY: airless planets (see shaders/dimension.properties). SUSY draws its own skybox for",
+      "// these dimensions, so the pack must not add an atmosphere it does not have: no volumetric",
+      "// clouds, no cumulonimbus, no second moon, no sky-ground haze.",
+      "#ifdef PLANET_MOON",
+      "    // Clouds are gated per layer, not only by VOLUMETRIC_CLOUDS, so all four go.",
+      "    #undef VOLUMETRIC_CLOUDS",
+      "    #undef CloudLayer0",
+      "    #undef CloudLayer1",
+      "    #undef CloudLayer2",
+      "    #undef CloudLayer3",
+      "    #undef CUMULONIMBUS",
+      "    #undef CUMULONIMBUS_LIGHTNING",
+      "    #undef TERRAIN_SHADOW_ON_CLOUDS",
+      "    // No pack moon: the body is the moon, not a sky decoration.",
+      "    #undef REALMOON",
+      "    #undef CUSTOM_MOON_ROTATION",
+      "    #undef SKY_GROUND"
+     ]
+    },
+    {
+     "line": 1397,
+     "delete": 0,
+     "insert": [
+      "    // Airless sky: no haze, and stars that read against black.",
+      "    #undef Haze_amount",
+      "    #define Haze_amount 0.0",
+      "    #undef TOD_Fog_mult",
+      "    #define TOD_Fog_mult 0.0",
+      "    #undef STARS_AMOUNT",
+      "    #define STARS_AMOUNT 2.0",
+      "    #undef STARS_BRIGHTNESS",
+      "    #define STARS_BRIGHTNESS 2.0",
+      "",
+      "    // No shader atmosphere at all. The sky LUT (`skyFromTex`) is added whatever RESOURCEPACK_SKY is,",
+      "    // which is why space still showed a blue gradient and a hazy horizon: isolating the skybox leaves",
+      "    // only what the dimension itself draws. The 50x skybox lift is the other half - it clips Earth and",
+      "    // the sun to white, so space uses a boost that keeps their detail. Stars still come from the",
+      "    // shader. `ISOLATE_RESOURCEPACK_SKY` is only an empty block in this file, so defining it works.",
+      "    #define ISOLATE_RESOURCEPACK_SKY",
+      "    #define RESOURCEPACK_SKY_BOOST 1.0",
+      "",
+      "    // Realism, part one: exposure. Auto exposure chases the average luminance, and in orbit that",
+      "    // average is a black sky, so it lifts the whole frame until the planet climbs into clipping -",
+      "    // which is why Earth was pale and flat rather than a lit body with a terminator. A fixed",
+      "    // exposure keeps the relative brightness between sky, stars and planet intact.",
+      "    #undef AUTO_EXPOSURE",
+      "    #undef Manual_exposure_value",
+      "    #define Manual_exposure_value 1.0",
+      "",
+      "    // Realism, part two: bloom. Bloom is what spreads the planet's bright limb into a wash; in",
+      "    // vacuum there is no medium to scatter, so only the sun should glow.",
+      "    #undef BLOOM_STRENGTH",
+      "    #define BLOOM_STRENGTH 0.35",
+      "",
+      "    // Realism, part three: specular. The pack's interface here is set for the overworld - 5x sun",
+      "    // specular with a low roughness threshold - and in vacuum there is no sky or terrain fill to",
+      "    // balance it, so the only bright thing on an entity is the sun's specular lobe: blown white",
+      "    // speckle over a black body, which is what the third-person player looked like. Back to a",
+      "    // physical 1x and require a smoother surface before anything reflects at all.",
+      "    #undef SUN_SPECULAR_MULT",
+      "    #define SUN_SPECULAR_MULT 1",
+      "    #undef ROUGHNESS_THRESHOLD",
+      "    #define ROUGHNESS_THRESHOLD 65",
+      "",
+      "    // Reflections out. In orbit there is nothing to mirror but a black sky with a small very bright",
+      "    // planet, so screen-space rays return either black or a clipped planet - the black/white speckle",
+      "    // that reads as a broken material on the player model. The defaults are now guarded with",
+      "    // #ifndef in the program files, so these reach specular.glsl.",
+      "    #define DEFERRED_SSR_QUALITY 0",
+      "    #define FORWARD_SSR_QUALITY 0",
+      "",
+      "    // The mod's own skybox only: full resource-pack sky, no shader sun or moon. Stars are",
+      "    // still drawn because the star block now admits PLANET_MOON; the sun/moon block does",
+      "    // not, so the pack cannot add a second celestial body next to SUSY's.",
+      "    // KNOWN GOOD for entities, at the cost of the mod's skybox: with RESOURCEPACK_SKY 0 the pack does",
+      "    // not enter the deferred2 sky-copy path, and the player renders correctly. Mode 2 put the sky",
+      "    // into colortex1 (the albedo buffer) over the entity, whose normals then read as noise - see the",
+      "    // landmine about deferred2. Proper fix needs the composite to take the background from colortex9",
+      "    // instead of colortex1, or a mod-side pipeline change.",
+      "    #undef RESOURCEPACK_SKY",
+      "    #define RESOURCEPACK_SKY 0",
+      "",
+      "    // TEMPORARY - REMOVE AFTER THE SPACE TEST. Forces the debug buffer for this dimension only, so",
+      "    // the rest of the game renders normally. debug_DIRECT shows `Direct_lighting`; flip the value to",
+      "    // debug_SPECULAR / debug_INDIRECT for the next look.",
+      "    #undef DEBUG_VIEW",
+      "    // #define DEBUG_VIEW debug_DEPTHTEX0",
+      "    // #define DEBUG_VIEW debug_NORMALS",
+      "",
+      "    // The direct-light view showed the player at roughly full white with dark bands: the sun term is",
+      "    // at full strength and the bands are entity shadow sampling. In vacuum nothing attenuates either",
+      "    // the sun or the sky's ambient, while the pack's 1.0 defaults assume an atmosphere has already",
+      "    // done that - so sunlit surfaces land at ~1.0 + ambient and clip to white.",
+      "    #undef DIRECTLIGHT_DIFFUSE_R",
+      "    #undef DIRECTLIGHT_DIFFUSE_G",
+      "    #undef DIRECTLIGHT_DIFFUSE_B",
+      "    #define DIRECTLIGHT_DIFFUSE_R 0.55",
+      "    #define DIRECTLIGHT_DIFFUSE_G 0.55",
+      "    #define DIRECTLIGHT_DIFFUSE_B 0.55",
+      "",
+      "    #undef AmbientLight_R",
+      "    #undef AmbientLight_G",
+      "    #undef AmbientLight_B",
+      "    #define AmbientLight_R 0.15",
+      "    #define AmbientLight_G 0.15",
+      "    #define AmbientLight_B 0.18",
+      "",
+      "    // Entity self-shadowing is what draws the horizontal bands across the model at this shadow map",
+      "    // resolution; in open space there is no scenery to cast onto it anyway.",
+      "    #undef RENDER_ENTITY_SHADOWS",
+      "    #undef RENDER_PLAYER_SHADOWS",
+      "#endif",
+      "// SUSY: underground dimensions (see shaders/dimension.properties). The nether program set already",
+      "// has no celestial sky, and its haze is what an enclosed dimension needs; this only makes the cave",
+      "// fog unconditional so the haze does not depend on where the player is.",
+      "#ifdef UNDERGROUND_DIM",
+      "    #undef CAVE_DETECTION",
+      "    #define CAVE_DETECTION 2",
+      "",
+      "    // The nether look is a wall of orange ash plumes, but those are not tied to lava or to the",
+      "    // nether at all: lib/nether_fog.glsl's cloudVol() is a pure noise field, so the plumes fill any",
+      "    // open cavern. Zeroing the density is what removes them and leaves bare rock.",
+      "    #undef NETHER_PLUME_DENSITY",
+      "    #define NETHER_PLUME_DENSITY 0.0",
+      "",
+      "    // Haze only, no plumes. Density is the thickening dial and colour the brightness dial; both are",
+      "    // kept low so distance stays just above black rather than glowing. Bloom and fog-bloom are left",
+      "    // at their defaults: both diffuse light across the frame, which lifts the background and breaks",
+      "    // the \"just below clipping\" look.",
+      "    #undef NETHER_HAZE_DENSITY",
+      "    #define NETHER_HAZE_DENSITY 1.0",
+      "",
+      "    // Ceiling smoke starts at y = 40 and would put a grey band across the upper caves.",
+      "    #undef NETHER_CEILING_SMOKE_DENSITY",
+      "    #define NETHER_CEILING_SMOKE_DENSITY 0.0",
+      "",
+      "    // Lifeless rock rather than a warm cave. SATURATION is chroma * (1 + SATURATION) toward luma,",
+      "    // -1.0 is fully grey, 0.0 leaves the image alone. -0.7 keeps 30% of the colour: enough for stone,",
+      "    // rust and torchlight to read apart, and little enough that the cool cast stays the only hue.",
+      "    #undef SATURATION",
+      "    #define SATURATION -0.7",
+      "",
+      "    // Dark: auto exposure lifts a dim scene enormously (targetExposure = 0.35/log(L+1.05), so a dark",
+      "    // cave lands near 7x), which is why the Beneath still looked lit. Turning it off makes exposure",
+      "    // the fixed Manual_exposure_value below, and the darkness finally holds. Trade-off: no adaptation",
+      "    // when walking between a lamp-lit room and open dark, which suits this dimension.",
+      "    #undef AUTO_EXPOSURE",
+      "    #undef Manual_exposure_value",
+      "    #define Manual_exposure_value 0.8",
+      "",
+      "    // Kill the minimum-light floor so unlit stone stays unlit.",
+      "    #undef MIN_LIGHT_AMOUNT",
+      "    #define MIN_LIGHT_AMOUNT 0.25",
+      "    #undef MIN_LIGHT_AMOUNT_INSIDE",
+      "    #define MIN_LIGHT_AMOUNT_INSIDE 0.15",
+      "",
+      "    // Rod vision (Purkinje) shifts dim scenes toward blue - exactly what a dark dimension would get.",
+      "    // Off, so darkness stays neutral grey and the cold tint stays where it was put.",
+      "    #undef Purkinje_strength",
+      "    #define Purkinje_strength 0",
+      "",
+      "    // Depth of field is the only softener that blurs without adding light, unlike bloom. FAR_BLUR_ONLY",
+      "    // keeps everything nearer than the focus plane sharp, so the ground underfoot stays clean and",
+      "    // only distance dissolves. MANUAL_FOCUS is in blocks; -2 would auto-focus on screen centre,",
+      "    // which is unreliable in a cave where the centre is often a black wall.",
+      "    // Blur strength is the const aperture = focal/fstop, scaled by DOF_APERTURE_SCALE (0.35 here",
+      "    // against the pack's 1.0), because that const is evaluated before this block and cannot be",
+      "    // overridden from here.",
+      "    #undef DOF_QUALITY",
+      "    #define DOF_QUALITY 1",
+      "    // Private macro rather than FAR_BLUR_ONLY: that name is a GUI boolean in shaders.properties, and",
+      "    // defining it bare makes Demonica log \"Ignoring ambiguous boolean option FAR_BLUR_ONLY\" and drop",
+      "    // it. composite11 tests both names.",
+      "    #define UG_FAR_BLUR_ONLY",
+      "    #undef MANUAL_FOCUS",
+      "    #define MANUAL_FOCUS 12",
+      "#endif"
+     ]
+    }
+   ]
+  },
+  {
+   "file": "shaders/lib/specular.glsl",
+   "sha256": "1f988352cbc0f7b4236ae4146b6b3094ff4a1aef70f8594470877bddb026ca5a",
+   "ops": [
+    {
+     "line": 2049,
+     "delete": 1,
+     "insert": [
+      "\t\tfloat minimumLightAmount = 0.06*nightVision + 0.001 * mix(MIN_LIGHT_AMOUNT_INSIDE, MIN_LIGHT_AMOUNT, clamp(skyLightLevelSmooth, 0.0, 1.0));"
+     ]
+    },
+    {
+     "line": 2053,
+     "delete": 1,
+     "insert": [
+      "\t\tindirectLight_fog += vec3(1.0) * (0.06*nightVision + 0.001 * mix(MIN_LIGHT_AMOUNT_INSIDE, MIN_LIGHT_AMOUNT, skyLightLevelSmooth));"
+     ]
+    },
+    {
+     "line": 2179,
+     "delete": 1,
+     "insert": [
+      "\t\tif (raytracePos.z > 1.00001) {",
+      "\t\t\t// SUSY: the ray left the viewport (or found nothing). Returning \"no",
+      "\t\t\t// reflection\" here was what drew a hard band wherever a mirror should have",
+      "\t\t\t// been showing sky: the march cannot continue past the screen edge, so the",
+      "\t\t\t// honest fallback is the sky reflection, not a cut to diffuse lighting.",
+      "\t\t\tbackgroundReflectMask = 1.0;",
+      "\t\t\treturn vec4(0.0);",
+      "\t\t}"
+     ]
+    },
+    {
+     "line": 2217,
+     "delete": 0,
+     "insert": [
+      "",
+      "\t\t// SUSY: fade to the sky reflection as the sampled point approaches the viewport",
+      "\t\t// border. Those are the hits the march cannot extend, and an exact mirror there",
+      "\t\t// always ended in a straight clip line (look down slightly and distant geometry",
+      "\t\t// vanished). The blur mask is raised with the same factor, so the transition is",
+      "\t\t// gradual instead of a step.",
+      "\t\tvec2 edgeDist = min(previousPosition.xy, vec2(1.0) - previousPosition.xy);",
+      "\t\tfloat edgeFade = smoothstep(0.0, 0.10, min(edgeDist.x, edgeDist.y));",
+      "\t\t// SUSY: and with ray length. A long ray is the one most likely to have run into",
+      "\t\t// the viewport edge, so its hit is the least trustworthy; near reflections stay",
+      "\t\t// exact and the far ones dissolve into the sky reflection instead of snapping to",
+      "\t\t// whatever happened to be hiding at the border.",
+      "\t\tfloat lenFade = 1.0 - smoothstep(0.55, 1.0, reflectionLength);",
+      "\t\tfloat ssrFade = min(edgeFade, lenFade);",
+      "\t\tbackgroundReflectMask = max(backgroundReflectMask, 1.0 - ssrFade);",
+      "\t\treflection.a *= ssrFade;",
+      "",
+      "\t\t// SUSY: LOD terrain. A hit flagged depthCheck came from the Distant Horizons /",
+      "\t\t// voxy depth, i.e. low-detail geometry drawn outside the real chunk range. Put",
+      "\t\t// through a mirror it shows up as blurry LOD blobs and ghosted copies of the far",
+      "\t\t// terrain, so drop those taps and fall back to the sky/background reflection for",
+      "\t\t// them. Set the mask as well: without it the fragment drops to plain diffuse",
+      "\t\t// lighting and the mirror gets a flat, unreflective patch with a hard edge where",
+      "\t\t// the real chunks end.",
+      "\t\tif (depthCheck) {",
+      "\t\t\tbackgroundReflectMask = 1.0;",
+      "\t\t\treflection = vec4(0.0);",
+      "\t\t}"
+     ]
+    },
+    {
+     "line": 2288,
+     "delete": 0,
+     "insert": [
+      "// SUSY: thin-film interference for surfaces marked prismatic in their specular map.",
+      "// A thin transparent film over a surface reflects each wavelength with a different phase, so",
+      "// the reflection takes on a hue that depends on the angle between view and surface - the",
+      "// soap-bubble / oil-slick effect. Film thickness drifts slowly with time and varies across",
+      "// world position, so neighbouring faces do not show the same rings.",
+      "vec3 prismaticFilmTint(float NdotV, vec3 worldPos){",
+      "\tconst float filmIOR = 1.40;",
+      "\tconst vec3 wavelength = vec3(650.0, 532.0, 460.0); // nm, R G B",
+      "",
+      "\tfloat thickness = 380.0",
+      "\t\t+ 110.0 * sin(TIME * 0.35 + dot(worldPos, vec3(1.7, 2.3, 1.3)))",
+      "\t\t+ 70.0  * sin(TIME * 0.61 - dot(worldPos, vec3(2.1, 1.1, 2.9)));",
+      "",
+      "\t// Snell: the ray bends into the film, shortening the optical path at grazing angles.",
+      "\tfloat cosT = sqrt(max(1.0 - (1.0 - NdotV*NdotV) / (filmIOR*filmIOR), 0.0));",
+      "",
+      "\tvec3 phase = 4.0 * 3.14159265359 * filmIOR * thickness * cosT / wavelength;",
+      "\tvec3 tint = 0.5 + 0.5 * cos(phase);",
+      "",
+      "\t// normalise back to unit luminance: the film tints the reflection, it does not add light, so a",
+      "\t// channel that happens to be facing away cannot turn the surface into a coloured lamp.",
+      "\ttint /= max(dot(tint, vec3(0.3333333)), 0.35);",
+      "\treturn tint;",
+      "}",
+      ""
+     ]
+    },
+    {
+     "line": 2318,
+     "delete": 0,
+     "insert": [
+      "\t,in float prismaticAmount // 1.0 = surface opted into the thin-film tint via its specular map",
+      "\t,in vec4 materialEffects // x sparkle, y anisotropic, z clearcoat, w dispersion"
+     ]
+    },
+    {
+     "line": 2329,
+     "delete": 0,
+     "insert": [
+      "\t// SUSY: a texture with no specular map can resolve to f0 = 1.0, and this shader reads that as",
+      "\t// \"metal, using albedo as F0\" - a reflection-only surface. In vacuum the only thing to reflect is",
+      "\t// the sky, so such a surface is painted with whatever is behind it: white when Earth fills the",
+      "\t// background, black when the stars do. That is the third-person player in space. Cap F0 to a",
+      "\t// dielectric there, so diffuse lighting exists again.",
+      "\t#ifdef PLANET_MOON",
+      "\t\tf0 = min(f0, 0.6);",
+      "\t#endif",
+      ""
+     ]
+    },
+    {
+     "line": 2333,
+     "delete": 0,
+     "insert": [
+      "\tfloat susySparkle = 0.0;",
+      ""
+     ]
+    },
+    {
+     "line": 2334,
+     "delete": 0,
+     "insert": [
+      "",
+      "\t// SUSY: sparkle. Micro-facets tilted by a high frequency hash of the world position, so ore and",
+      "\t// stone flash as the view or the light moves. Small amplitude: it should read as grain, not noise.",
+      "\tif (materialEffects.x > 0.0) {",
+      "\t\tvec3 cell = floor(playerPos * 26.0);",
+      "\t\tvec3 h = fract(sin(vec3(dot(cell, vec3(12.9898, 78.233, 37.719)),",
+      "\t\t\t\tdot(cell, vec3(39.346, 11.135, 83.155)),",
+      "\t\t\t\tdot(cell, vec3(73.156, 52.235, 9.151)))) * 43758.5453);",
+      "\t\tnormal = normalize(normal + (h * 2.0 - 1.0) * 0.32);",
+      "\t\t// a small fraction of the facets face the light at once; without this the jitter alone is",
+      "\t\t// invisible on a low-F0 surface like stone",
+      "\t\tsusySparkle = pow(max(dot(normal, normalize(-NplayerPos + lightVec)), 0.0), 220.0) * materialEffects.x;",
+      "\t}",
+      "",
+      "\t// SUSY: brushed metal. The deferred pass has no tangent attribute, so the grain is taken as",
+      "\t// horizontal (normal cross world up) - which is what a rolled sheet or a lathed pipe shows anyway.",
+      "\t// Along the grain the lobe tightens, across it stays broad: that is the streak, not a dot.",
+      "\tif (materialEffects.y > 0.0) {",
+      "\t\tvec3 grainDirection = normalize(cross(normal, vec3(0.0, 1.0, 0.0)) + vec3(1e-5));",
+      "\t\tfloat alongGrain = dot(normalize(NplayerPos), grainDirection);",
+      "\t\troughness = mix(roughness, roughness * roughness * 0.30, alongGrain * alongGrain);",
+      "\t}"
+     ]
+    },
+    {
+     "line": 2417,
+     "delete": 1,
+     "insert": [
+      "\t\t\t\t// SUSY: a metal has no diffuse term, so a torch contributes nothing to it and the block",
+      "\t\t\t\t// reads as black indoors. Keep a small fraction of the lit albedo so the colour survives in",
+      "\t\t\t\t// the shade; 0.22 is invisible in daylight and enough under a torch.",
+      "\t\t\t\tvec3 DarkenedDiffuseLighting = isMetal ? diffuseLighting * ((1.0-enviornmentReflection.a) * (1.0-lightmap) + 0.22) : diffuseLighting;"
+     ]
+    },
+    {
+     "line": 2420,
+     "delete": 1,
+     "insert": [
+      "\t\t\t\t\tvec3 DarkenedDiffuseLighting2 = isMetal ? diffuseLighting * 0.22 : diffuseLighting;"
+     ]
+    },
+    {
+     "line": 2425,
+     "delete": 0,
+     "insert": [
+      "\t\t\t\t// SUSY: the return below is guarded only by DENOISED_REFLECTIONS, not by",
+      "\t\t\t\t// SSR quality, so this declaration must exist when SSR is disabled too or",
+      "\t\t\t\t// the program fails to compile (\"undefined variable",
+      "\t\t\t\t// DarkenedDiffuseLighting2\") and the whole pack is rejected.",
+      "\t\t\t\t#if defined DEFERRED_SPECULAR && defined DENOISED_REFLECTIONS",
+      "\t\t\t\t\tvec3 DarkenedDiffuseLighting2 = isMetal ? diffuseLighting * 0.22 : diffuseLighting;",
+      "\t\t\t\t#endif"
+     ]
+    },
+    {
+     "line": 2435,
+     "delete": 0,
+     "insert": [
+      "",
+      "\t\t\t// SUSY: prismatic surfaces tint whatever they reflect with a thin-film hue. The opt-in",
+      "\t\t\t// arrives from the specular map's blue channel (see all_solid.fsh), so this touches only",
+      "\t\t\t// the blocks that ask for it and leaves every other material byte-identical.",
+      "\t\t\tif (prismaticAmount > 0.0) {",
+      "\t\t\t\tvec3 filmTint = prismaticFilmTint(clamp(dot(normalize(normal), normalize(-NplayerPos)), 0.0, 1.0), playerPos);",
+      "\t\t\t\tvec3 tintedReflection = specularReflections * mix(vec3(1.0), filmTint, 0.85);",
+      "\t\t\t\t// a sliver of self-colour: with nothing bright to reflect the film would be invisible",
+      "\t\t\t\ttintedReflection += filmTint * 0.04 * backgroundReflectMask;",
+      "\t\t\t\tspecularReflections = mix(specularReflections, tintedReflection, prismaticAmount);",
+      "\t\t\t}",
+      "",
+      "\t\t\t// SUSY: a dielectric reflects white, which is the grey film seen on anything coloured - a",
+      "\t\t\t// painted casing, a drum, a machine front. Tinting the reflection with the surface's own",
+      "\t\t\t// albedo removes it without touching diffuse lighting. Metals need nothing here: their F0 is",
+      "\t\t\t// already the albedo, so they are coloured by construction.",
+      "\t\t\tif (!isMetal) {",
+      "\t\t\t\tspecularReflections *= mix(vec3(1.0), albedo, 0.45);",
+      "\t\t\t}",
+      "",
+      "\t\t\t// SUSY: dispersion. A true split needs one raytrace per channel, and this pack reflects",
+      "\t\t\t// through the voxel raytracer, so the reflection is tinted by the dispersion angle instead:",
+      "\t\t\t// an approximation, but it costs nothing and reads correctly on curved glass and gems.",
+      "\t\t\tif (materialEffects.w > 0.0) {",
+      "\t\t\t\tfloat cosView = clamp(dot(normalize(normal), normalize(-NplayerPos)), 0.0, 1.0);",
+      "\t\t\t\tfloat splitPhase = 6.2831853 * (1.0 - cosView) * 2.0;",
+      "\t\t\t\tvec3 splitTint = 1.0 + 0.45 * vec3(cos(splitPhase), cos(splitPhase + 2.0944), cos(splitPhase + 4.1888));",
+      "\t\t\t\tspecularReflections *= mix(vec3(1.0), splitTint, materialEffects.w);",
+      "\t\t\t}"
+     ]
+    },
+    {
+     "line": 2452,
+     "delete": 0,
+     "insert": [
+      "\t\t// SUSY: clearcoat. A sharp, weak second lobe laid over the base material - varnish over paint,",
+      "\t\t// which is what makes a lacquered casing read deeper than a matte one. Sun driven only, so it",
+      "\t\t// cannot glow in the dark.",
+      "\t\tif (materialEffects.z > 0.0) {",
+      "\t\t\tvec3 coatLobe = GGX(normal, -NplayerPos, lightVec, 0.012, vec3(0.05), vec3(1.0));",
+      "\t\t\t// tinted by the paint: a white coat is exactly what washed the colour out",
+      "\t\t\tvec3 coatTint = mix(vec3(1.0), albedo, 0.5);",
+      "\t\t\tspecularReflections += coatLobe * materialEffects.z * lightColor * 1.35 * backgroundReflectMask * coatTint;",
+      "\t\t}",
+      "",
+      "\t\t// SUSY: the sparkle glint rides on the light, so it flashes as the sun or the view moves.",
+      "\t\tspecularReflections += susySparkle * lightColor * 2.5;",
+      ""
+     ]
+    },
+    {
+     "line": 2518,
+     "delete": 0,
+     "insert": [
+      ""
+     ]
+    }
+   ]
+  },
+  {
+   "file": "shaders/lib/voxel_write.glsl",
+   "sha256": "7f22c3700997fec67d9b8da28d1e873adbc45644a1284e03274d1f64503bed6a",
+   "ops": [
+    {
+     "line": 110,
+     "delete": 1,
+     "insert": [
+      "\t\t\t// SUSY: the emission attribute is honoured for the translucent families we map",
+      "\t\t\t// by id as well. A glass shape that is a light source reports the material's",
+      "\t\t\t// glass id (needed for tinting), so it is no longer \"unmapped\" and the plain",
+      "\t\t\t// voxelId == 0 test suppressed its glow. Inert until the id's owner fills the",
+      "\t\t\t// attribute: the ArchitectureCraft stamp currently passes 0 there.",
+      "\t\t\tif (at_midBlock.w > 0 && (voxelId == 0u || (voxelId >= BLOCK_GLASS && voxelId <= BLOCK_GLASS_YELLOW) || voxelId == BLOCK_ICE))",
+      "\t\t\t\tvoxelId = uint(BLOCK_LIGHT_1 + at_midBlock.w - 1);"
+     ]
+    }
+   ]
+  },
+  {
+   "file": "shaders/shaders.properties",
+   "sha256": "15df98e9beb3fc8b7364a96bfb3cd043164d824008462921e1d3e9d8472fbcf0",
+   "ops": [
+    {
+     "line": 210,
+     "delete": 3,
+     "insert": [
+      "# program.world0/composite2.enabled = DENOISED_REFLECTIONS && DEFERRED_SPECULAR && DEFERRED_ROUGH_REFLECTION",
+      "# program.world1/composite2.enabled = DENOISED_REFLECTIONS && DEFERRED_SPECULAR && DEFERRED_ROUGH_REFLECTION",
+      "# program.world-1/composite2.enabled = DENOISED_REFLECTIONS && DEFERRED_SPECULAR && DEFERRED_ROUGH_REFLECTION"
+     ]
+    },
+    {
+     "line": 1174,
+     "delete": 0,
+     "insert": [
+      "# KuraBalanced (KuraEdit tuning, Chroma Patch patch data)",
+      "# SUSY: the tuned look of this stack. It pins every option the other profiles below touch,",
+      "# plus the values from the reference tuning, each at its tuned or default value - so no other",
+      "# profile can match its state and it works as a one-click restore.",
+      "# Generated by tools/gen-neeyolite-profile.py from a Demonica options file.",
+      "profile.SUSY = AO_Strength:1.0 !AUTO_EXPOSURE BLEND_FACTOR:0.12 BLEND_FACTOR_DURING_MOVEMENT:0.12 BLOOM_STRENGTH:0.75 !BorderFog CLOUD_MOVEMENT_TYPE:1 CLOUD_SAMPLES:20 CROSSTALK:0.0 CUMULONIMBUS:0 CURVATURE_AMOUNT:10.0 CUSTOM_MOON_ROTATION CUSTOM_SHADOWS_QUALITY:1 CloudLayer0 CloudLayer0_coverage:0.8 CloudLayer0_detail:550.0 CloudLayer0_distance:8000.0 CloudLayer0_scale:0.9 CloudLayer1 CloudLayer1_coverage:0.8 CloudLayer1_distance:8000.0 CloudLayer1_scale:0.9 CloudLayer1_tallness:100.0 CloudLayer2 CloudLayer2_coverage:0.4 CloudLayer2_distance:12000.0 CloudLayer2_scale:1.0 CloudLayer3 CloudLayer3_coverage:0.06 CloudLayer3_distance:12000.0 CloudLayer3_scale:1.0 Cloud_Speed:1.5 !DARKFOREST_ENV DEFERRED_ROUGH_REFLECTION DEFERRED_SSR_QUALITY:60 DENOISED_REFLECTIONS !DH_SCREENSPACE_REFLECTIONS Dirt_Absorb_B:0.38 Dirt_Absorb_G:0.4 Dirt_Absorb_R:0.68 Dirt_Amount:0.1 Dirt_Scatter_B:0.39 Dirt_Scatter_G:0.39 Dirt_Scatter_R:0.6 EMISSIVE_ORES:1 EMISSIVE_ORES_STRENGTH:0.9 EMISSIVE_TRIMS_STRENGTH:1.0 EMISSIVE_TYPE_SETTING:2 END_ISLAND_LIGHT EXPOSURE_MULTIPLIER:1.0 Emissive_Brightness:4.0 Emissive_Curve:1.0 Evening_Uniform_Fog:0.03 Exposure_Speed:4.0 FORWARD_ROUGH_REFLECTION FORWARD_SSR_QUALITY:30 GRASS_DENSITY:1 HANDHELD_LIGHT_RANGE:20 HANDHELD_LIGHT_REFLECTIONS:75 HQ_CLOUD_UPSAMPLE Haze_amount:0.6 !JUNGLE_ENV LPV_COLORED_CANDLES LPV_ENABLED LPV_HANDHELD_SHADOWS_QUALITY:1 LPV_NORMAL_STRENGTH:70 LPV_NOSHADOW_HACK LPV_SATURATION:70 LPV_SIZE:6 LPV_TINT_SATURATION:110 !LPV_VL_FOG_ILLUMINATION LPV_VL_FOG_ILLUMINATION_BRIGHTNESS:0 !LPV_VL_FOG_ILLUMINATION_HANDHELD_WATER !MATERIAL_AO MIN_LIGHT_AMOUNT:9.0 MIN_LIGHT_AMOUNT_INSIDE:9.0 MOON_NORMALS Morning_Cloudy_Fog:0.03 Morning_Uniform_Fog:0.02 NORMAL_MAP_MULT:0.5 Night_Cloudy_Fog:0.03 Night_Uniform_Fog:0.04 !PALE_GARDEN_ENV !PER_BIOME_ENVIRONMENT PHOTONICS_ACTIVE POM_DEPTH:0.0 PUDDLE_MODE:1 Puddle_Size:0.9 !QUARTER_RES_SSR RAINBOW:1 RAY_COUNT:6 REALMOON !RENDER_ENTITY_SHADOWS RIPPLE_INTENSITY:0.8 RIPPLE_PUDDLES RIPPLE_STRENGTH:0.9 RIPPLE_WATER ROUGHNESS_THRESHOLD:50 Rain_coverage:0.3 !SAND_STORMS SATURATION:0.0 SCALE_FACTOR:0.65 SCREENSPACE_DIRECT_SSS_BLENDING:0.5 !SHADER_GRASS_SETTING SHARPENING:0 SKY_GROUND !SNELLS_WINDOW !SNOW_STORMS STARS_AMOUNT:1.75 STARS_BRIGHTNESS:1.5 SUN_SPECULAR_MULT:2 !SWAMP_ENV ShaderSnow:1 ShaderSnowStrength:0.9 Sky_Brightness:1.0 Sun_temp:6300 !TAA_UPSCALING TERRAIN_SHADOW_ON_CLOUDS TOD_Fog_mult:0.75 TONEMAP:ToneMap_AgX_minimal_merlin TORCH_AMOUNT:1.3 TORCH_B:0.57 TORCH_G:0.75 TRANSLUCENT_COLORED_SHADOWS Thunder_coverage:0.3 VL_RENDER_SCALE:0.5 VL_SAMPLES:6 WATER_CAUSTICS_POWER:1.0 WATER_INTERACTION:0 WATER_SIM_DISTANCE:3 WATER_SIM_FRAMERATE:60 WATER_SIM_SCALE:2 WATER_WAVE_SPEED:0.8 WATER_WAVE_STRENGTH:0.9 !WAVY_PLANTS WHITE_BALANCE:6500 Water_Absorb_B:0.0660636 Water_Absorb_G:0.108329 Water_Absorb_R:0.392389 ambient_brightness:1.0 ambientsss_brightness:1.0 entityShadowDistanceMul:0.20 indirect_effect:SSAO_FILTERED shadowDistance:80.0 shadowMapResolution:1024",
+      ""
+     ]
+    }
+   ]
+  }
+ ],
+ "replace_files": [
+  {
+   "file": "shaders/block.properties",
+   "source": "files/shaders__block.properties"
+  },
+  {
+   "file": "shaders/dimension.properties",
+   "source": "files/shaders__dimension.properties"
+  },
+  {
+   "file": "shaders/template/.gitignore",
+   "source": "files/shaders__template__.gitignore"
+  },
+  {
+   "file": "shaders/template/install_update_iProperties.bat",
+   "source": "files/shaders__template__install_update_iProperties.bat"
+  },
+  {
+   "file": "shaders/template/install_update_iProperties.sh",
+   "source": "files/shaders__template__install_update_iProperties.sh"
+  },
+  {
+   "file": "shaders/template/process_all.bat",
+   "source": "files/shaders__template__process_all.bat"
+  },
+  {
+   "file": "shaders/template/process_all.sh",
+   "source": "files/shaders__template__process_all.sh"
+  },
+  {
+   "file": "shaders/texture/blueNoise.png.mcmeta",
+   "source": "files/shaders__texture__blueNoise.png.mcmeta"
+  },
+  {
+   "file": "shaders/texture/corona.png.mcmeta",
+   "source": "files/shaders__texture__corona.png.mcmeta"
+  },
+  {
+   "file": "shaders/texture/noises.png.mcmeta",
+   "source": "files/shaders__texture__noises.png.mcmeta"
+  }
+ ],
+ "add_files": [
+  {
+   "file": "shaders/DIM10/begin.csh",
+   "source": "files/shaders__DIM10__begin.csh"
+  },
+  {
+   "file": "shaders/DIM10/clrwl_gbuffers.fsh",
+   "source": "files/shaders__DIM10__clrwl_gbuffers.fsh"
+  },
+  {
+   "file": "shaders/DIM10/clrwl_gbuffers.vsh",
+   "source": "files/shaders__DIM10__clrwl_gbuffers.vsh"
+  },
+  {
+   "file": "shaders/DIM10/clrwl_gbuffers_damagedblock.fsh",
+   "source": "files/shaders__DIM10__clrwl_gbuffers_damagedblock.fsh"
+  },
+  {
+   "file": "shaders/DIM10/clrwl_gbuffers_damagedblock.vsh",
+   "source": "files/shaders__DIM10__clrwl_gbuffers_damagedblock.vsh"
+  },
+  {
+   "file": "shaders/DIM10/clrwl_gbuffers_glint.fsh",
+   "source": "files/shaders__DIM10__clrwl_gbuffers_glint.fsh"
+  },
+  {
+   "file": "shaders/DIM10/clrwl_gbuffers_glint.vsh",
+   "source": "files/shaders__DIM10__clrwl_gbuffers_glint.vsh"
+  },
+  {
+   "file": "shaders/DIM10/clrwl_gbuffers_translucent.fsh",
+   "source": "files/shaders__DIM10__clrwl_gbuffers_translucent.fsh"
+  },
+  {
+   "file": "shaders/DIM10/clrwl_gbuffers_translucent.vsh",
+   "source": "files/shaders__DIM10__clrwl_gbuffers_translucent.vsh"
+  },
+  {
+   "file": "shaders/DIM10/clrwl_shadow.fsh",
+   "source": "files/shaders__DIM10__clrwl_shadow.fsh"
+  },
+  {
+   "file": "shaders/DIM10/clrwl_shadow.vsh",
+   "source": "files/shaders__DIM10__clrwl_shadow.vsh"
+  },
+  {
+   "file": "shaders/DIM10/composite.fsh",
+   "source": "files/shaders__DIM10__composite.fsh"
+  },
+  {
+   "file": "shaders/DIM10/composite.vsh",
+   "source": "files/shaders__DIM10__composite.vsh"
+  },
+  {
+   "file": "shaders/DIM10/composite1.fsh",
+   "source": "files/shaders__DIM10__composite1.fsh"
+  },
+  {
+   "file": "shaders/DIM10/composite1.vsh",
+   "source": "files/shaders__DIM10__composite1.vsh"
+  },
+  {
+   "file": "shaders/DIM10/composite10.fsh",
+   "source": "files/shaders__DIM10__composite10.fsh"
+  },
+  {
+   "file": "shaders/DIM10/composite10.vsh",
+   "source": "files/shaders__DIM10__composite10.vsh"
+  },
+  {
+   "file": "shaders/DIM10/composite11.fsh",
+   "source": "files/shaders__DIM10__composite11.fsh"
+  },
+  {
+   "file": "shaders/DIM10/composite11.vsh",
+   "source": "files/shaders__DIM10__composite11.vsh"
+  },
+  {
+   "file": "shaders/DIM10/composite12.fsh",
+   "source": "files/shaders__DIM10__composite12.fsh"
+  },
+  {
+   "file": "shaders/DIM10/composite12.vsh",
+   "source": "files/shaders__DIM10__composite12.vsh"
+  },
+  {
+   "file": "shaders/DIM10/composite2.fsh",
+   "source": "files/shaders__DIM10__composite2.fsh"
+  },
+  {
+   "file": "shaders/DIM10/composite2.vsh",
+   "source": "files/shaders__DIM10__composite2.vsh"
+  },
+  {
+   "file": "shaders/DIM10/composite20.csh",
+   "source": "files/shaders__DIM10__composite20.csh"
+  },
+  {
+   "file": "shaders/DIM10/composite3.fsh",
+   "source": "files/shaders__DIM10__composite3.fsh"
+  },
+  {
+   "file": "shaders/DIM10/composite3.vsh",
+   "source": "files/shaders__DIM10__composite3.vsh"
+  },
+  {
+   "file": "shaders/DIM10/composite4.fsh",
+   "source": "files/shaders__DIM10__composite4.fsh"
+  },
+  {
+   "file": "shaders/DIM10/composite4.vsh",
+   "source": "files/shaders__DIM10__composite4.vsh"
+  },
+  {
+   "file": "shaders/DIM10/composite5.fsh",
+   "source": "files/shaders__DIM10__composite5.fsh"
+  },
+  {
+   "file": "shaders/DIM10/composite5.vsh",
+   "source": "files/shaders__DIM10__composite5.vsh"
+  },
+  {
+   "file": "shaders/DIM10/composite6.fsh",
+   "source": "files/shaders__DIM10__composite6.fsh"
+  },
+  {
+   "file": "shaders/DIM10/composite6.vsh",
+   "source": "files/shaders__DIM10__composite6.vsh"
+  },
+  {
+   "file": "shaders/DIM10/composite7.fsh",
+   "source": "files/shaders__DIM10__composite7.fsh"
+  },
+  {
+   "file": "shaders/DIM10/composite7.vsh",
+   "source": "files/shaders__DIM10__composite7.vsh"
+  },
+  {
+   "file": "shaders/DIM10/composite8.fsh",
+   "source": "files/shaders__DIM10__composite8.fsh"
+  },
+  {
+   "file": "shaders/DIM10/composite8.vsh",
+   "source": "files/shaders__DIM10__composite8.vsh"
+  },
+  {
+   "file": "shaders/DIM10/composite9.fsh",
+   "source": "files/shaders__DIM10__composite9.fsh"
+  },
+  {
+   "file": "shaders/DIM10/composite9.vsh",
+   "source": "files/shaders__DIM10__composite9.vsh"
+  },
+  {
+   "file": "shaders/DIM10/deferred.csh",
+   "source": "files/shaders__DIM10__deferred.csh"
+  },
+  {
+   "file": "shaders/DIM10/deferred1.fsh",
+   "source": "files/shaders__DIM10__deferred1.fsh"
+  },
+  {
+   "file": "shaders/DIM10/deferred1.vsh",
+   "source": "files/shaders__DIM10__deferred1.vsh"
+  },
+  {
+   "file": "shaders/DIM10/deferred2.fsh",
+   "source": "files/shaders__DIM10__deferred2.fsh"
+  },
+  {
+   "file": "shaders/DIM10/deferred2.vsh",
+   "source": "files/shaders__DIM10__deferred2.vsh"
+  },
+  {
+   "file": "shaders/DIM10/dh_terrain.fsh",
+   "source": "files/shaders__DIM10__dh_terrain.fsh"
+  },
+  {
+   "file": "shaders/DIM10/dh_terrain.vsh",
+   "source": "files/shaders__DIM10__dh_terrain.vsh"
+  },
+  {
+   "file": "shaders/DIM10/dh_water.fsh",
+   "source": "files/shaders__DIM10__dh_water.fsh"
+  },
+  {
+   "file": "shaders/DIM10/dh_water.vsh",
+   "source": "files/shaders__DIM10__dh_water.vsh"
+  },
+  {
+   "file": "shaders/DIM10/final.fsh",
+   "source": "files/shaders__DIM10__final.fsh"
+  },
+  {
+   "file": "shaders/DIM10/final.vsh",
+   "source": "files/shaders__DIM10__final.vsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_armor_glint.fsh",
+   "source": "files/shaders__DIM10__gbuffers_armor_glint.fsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_armor_glint.vsh",
+   "source": "files/shaders__DIM10__gbuffers_armor_glint.vsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_basic.fsh",
+   "source": "files/shaders__DIM10__gbuffers_basic.fsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_basic.vsh",
+   "source": "files/shaders__DIM10__gbuffers_basic.vsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_beaconbeam.fsh",
+   "source": "files/shaders__DIM10__gbuffers_beaconbeam.fsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_beaconbeam.gsh",
+   "source": "files/shaders__DIM10__gbuffers_beaconbeam.gsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_beaconbeam.vsh",
+   "source": "files/shaders__DIM10__gbuffers_beaconbeam.vsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_block.fsh",
+   "source": "files/shaders__DIM10__gbuffers_block.fsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_block.vsh",
+   "source": "files/shaders__DIM10__gbuffers_block.vsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_block_translucent.fsh",
+   "source": "files/shaders__DIM10__gbuffers_block_translucent.fsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_block_translucent.vsh",
+   "source": "files/shaders__DIM10__gbuffers_block_translucent.vsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_damagedblock.fsh",
+   "source": "files/shaders__DIM10__gbuffers_damagedblock.fsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_damagedblock.vsh",
+   "source": "files/shaders__DIM10__gbuffers_damagedblock.vsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_entities.fsh",
+   "source": "files/shaders__DIM10__gbuffers_entities.fsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_entities.vsh",
+   "source": "files/shaders__DIM10__gbuffers_entities.vsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_entities_glowing.fsh",
+   "source": "files/shaders__DIM10__gbuffers_entities_glowing.fsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_entities_glowing.vsh",
+   "source": "files/shaders__DIM10__gbuffers_entities_glowing.vsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_entities_translucent.fsh",
+   "source": "files/shaders__DIM10__gbuffers_entities_translucent.fsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_entities_translucent.vsh",
+   "source": "files/shaders__DIM10__gbuffers_entities_translucent.vsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_hand.fsh",
+   "source": "files/shaders__DIM10__gbuffers_hand.fsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_hand.vsh",
+   "source": "files/shaders__DIM10__gbuffers_hand.vsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_hand_water.fsh",
+   "source": "files/shaders__DIM10__gbuffers_hand_water.fsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_hand_water.vsh",
+   "source": "files/shaders__DIM10__gbuffers_hand_water.vsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_lightning.fsh",
+   "source": "files/shaders__DIM10__gbuffers_lightning.fsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_lightning.vsh",
+   "source": "files/shaders__DIM10__gbuffers_lightning.vsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_particles.fsh",
+   "source": "files/shaders__DIM10__gbuffers_particles.fsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_particles.vsh",
+   "source": "files/shaders__DIM10__gbuffers_particles.vsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_particles_translucent.fsh",
+   "source": "files/shaders__DIM10__gbuffers_particles_translucent.fsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_particles_translucent.vsh",
+   "source": "files/shaders__DIM10__gbuffers_particles_translucent.vsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_skybasic.fsh",
+   "source": "files/shaders__DIM10__gbuffers_skybasic.fsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_skybasic.vsh",
+   "source": "files/shaders__DIM10__gbuffers_skybasic.vsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_skytextured.fsh",
+   "source": "files/shaders__DIM10__gbuffers_skytextured.fsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_skytextured.vsh",
+   "source": "files/shaders__DIM10__gbuffers_skytextured.vsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_spidereyes.fsh",
+   "source": "files/shaders__DIM10__gbuffers_spidereyes.fsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_spidereyes.vsh",
+   "source": "files/shaders__DIM10__gbuffers_spidereyes.vsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_terrain.fsh",
+   "source": "files/shaders__DIM10__gbuffers_terrain.fsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_terrain.gsh",
+   "source": "files/shaders__DIM10__gbuffers_terrain.gsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_terrain.tcs",
+   "source": "files/shaders__DIM10__gbuffers_terrain.tcs"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_terrain.tes",
+   "source": "files/shaders__DIM10__gbuffers_terrain.tes"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_terrain.vsh",
+   "source": "files/shaders__DIM10__gbuffers_terrain.vsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_terrain_cutout.fsh",
+   "source": "files/shaders__DIM10__gbuffers_terrain_cutout.fsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_terrain_cutout.vsh",
+   "source": "files/shaders__DIM10__gbuffers_terrain_cutout.vsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_textured.fsh",
+   "source": "files/shaders__DIM10__gbuffers_textured.fsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_textured.vsh",
+   "source": "files/shaders__DIM10__gbuffers_textured.vsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_textured_lit.fsh",
+   "source": "files/shaders__DIM10__gbuffers_textured_lit.fsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_textured_lit.vsh",
+   "source": "files/shaders__DIM10__gbuffers_textured_lit.vsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_voxels.fsh",
+   "source": "files/shaders__DIM10__gbuffers_voxels.fsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_voxels.vsh",
+   "source": "files/shaders__DIM10__gbuffers_voxels.vsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_water.fsh",
+   "source": "files/shaders__DIM10__gbuffers_water.fsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_water.vsh",
+   "source": "files/shaders__DIM10__gbuffers_water.vsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_weather.fsh",
+   "source": "files/shaders__DIM10__gbuffers_weather.fsh"
+  },
+  {
+   "file": "shaders/DIM10/gbuffers_weather.vsh",
+   "source": "files/shaders__DIM10__gbuffers_weather.vsh"
+  },
+  {
+   "file": "shaders/DIM10/prepare4.fsh",
+   "source": "files/shaders__DIM10__prepare4.fsh"
+  },
+  {
+   "file": "shaders/DIM10/prepare4.vsh",
+   "source": "files/shaders__DIM10__prepare4.vsh"
+  },
+  {
+   "file": "shaders/DIM10/setup.csh",
+   "source": "files/shaders__DIM10__setup.csh"
+  },
+  {
+   "file": "shaders/DIM10/shadow.fsh",
+   "source": "files/shaders__DIM10__shadow.fsh"
+  },
+  {
+   "file": "shaders/DIM10/shadow.vsh",
+   "source": "files/shaders__DIM10__shadow.vsh"
+  },
+  {
+   "file": "shaders/DIM10/shadow_voxels.fsh",
+   "source": "files/shaders__DIM10__shadow_voxels.fsh"
+  },
+  {
+   "file": "shaders/DIM10/shadow_voxels.vsh",
+   "source": "files/shaders__DIM10__shadow_voxels.vsh"
+  },
+  {
+   "file": "shaders/DIM10/voxy.json",
+   "source": "files/shaders__DIM10__voxy.json"
+  },
+  {
+   "file": "shaders/DIM10/voxy_opaque.glsl",
+   "source": "files/shaders__DIM10__voxy_opaque.glsl"
+  },
+  {
+   "file": "shaders/DIM10/voxy_translucent.glsl",
+   "source": "files/shaders__DIM10__voxy_translucent.glsl"
+  },
+  {
+   "file": "shaders/DIM3/begin.csh",
+   "source": "files/shaders__DIM3__begin.csh"
+  },
+  {
+   "file": "shaders/DIM3/clrwl_gbuffers.fsh",
+   "source": "files/shaders__DIM3__clrwl_gbuffers.fsh"
+  },
+  {
+   "file": "shaders/DIM3/clrwl_gbuffers.vsh",
+   "source": "files/shaders__DIM3__clrwl_gbuffers.vsh"
+  },
+  {
+   "file": "shaders/DIM3/clrwl_gbuffers_damagedblock.fsh",
+   "source": "files/shaders__DIM3__clrwl_gbuffers_damagedblock.fsh"
+  },
+  {
+   "file": "shaders/DIM3/clrwl_gbuffers_damagedblock.vsh",
+   "source": "files/shaders__DIM3__clrwl_gbuffers_damagedblock.vsh"
+  },
+  {
+   "file": "shaders/DIM3/clrwl_gbuffers_glint.fsh",
+   "source": "files/shaders__DIM3__clrwl_gbuffers_glint.fsh"
+  },
+  {
+   "file": "shaders/DIM3/clrwl_gbuffers_glint.vsh",
+   "source": "files/shaders__DIM3__clrwl_gbuffers_glint.vsh"
+  },
+  {
+   "file": "shaders/DIM3/clrwl_gbuffers_translucent.fsh",
+   "source": "files/shaders__DIM3__clrwl_gbuffers_translucent.fsh"
+  },
+  {
+   "file": "shaders/DIM3/clrwl_gbuffers_translucent.vsh",
+   "source": "files/shaders__DIM3__clrwl_gbuffers_translucent.vsh"
+  },
+  {
+   "file": "shaders/DIM3/clrwl_shadow.fsh",
+   "source": "files/shaders__DIM3__clrwl_shadow.fsh"
+  },
+  {
+   "file": "shaders/DIM3/clrwl_shadow.vsh",
+   "source": "files/shaders__DIM3__clrwl_shadow.vsh"
+  },
+  {
+   "file": "shaders/DIM3/composite.fsh",
+   "source": "files/shaders__DIM3__composite.fsh"
+  },
+  {
+   "file": "shaders/DIM3/composite.vsh",
+   "source": "files/shaders__DIM3__composite.vsh"
+  },
+  {
+   "file": "shaders/DIM3/composite1.fsh",
+   "source": "files/shaders__DIM3__composite1.fsh"
+  },
+  {
+   "file": "shaders/DIM3/composite1.vsh",
+   "source": "files/shaders__DIM3__composite1.vsh"
+  },
+  {
+   "file": "shaders/DIM3/composite10.fsh",
+   "source": "files/shaders__DIM3__composite10.fsh"
+  },
+  {
+   "file": "shaders/DIM3/composite10.vsh",
+   "source": "files/shaders__DIM3__composite10.vsh"
+  },
+  {
+   "file": "shaders/DIM3/composite11.fsh",
+   "source": "files/shaders__DIM3__composite11.fsh"
+  },
+  {
+   "file": "shaders/DIM3/composite11.vsh",
+   "source": "files/shaders__DIM3__composite11.vsh"
+  },
+  {
+   "file": "shaders/DIM3/composite12.fsh",
+   "source": "files/shaders__DIM3__composite12.fsh"
+  },
+  {
+   "file": "shaders/DIM3/composite12.vsh",
+   "source": "files/shaders__DIM3__composite12.vsh"
+  },
+  {
+   "file": "shaders/DIM3/composite2.fsh",
+   "source": "files/shaders__DIM3__composite2.fsh"
+  },
+  {
+   "file": "shaders/DIM3/composite2.vsh",
+   "source": "files/shaders__DIM3__composite2.vsh"
+  },
+  {
+   "file": "shaders/DIM3/composite20.csh",
+   "source": "files/shaders__DIM3__composite20.csh"
+  },
+  {
+   "file": "shaders/DIM3/composite3.fsh",
+   "source": "files/shaders__DIM3__composite3.fsh"
+  },
+  {
+   "file": "shaders/DIM3/composite3.vsh",
+   "source": "files/shaders__DIM3__composite3.vsh"
+  },
+  {
+   "file": "shaders/DIM3/composite4.fsh",
+   "source": "files/shaders__DIM3__composite4.fsh"
+  },
+  {
+   "file": "shaders/DIM3/composite4.vsh",
+   "source": "files/shaders__DIM3__composite4.vsh"
+  },
+  {
+   "file": "shaders/DIM3/composite5.fsh",
+   "source": "files/shaders__DIM3__composite5.fsh"
+  },
+  {
+   "file": "shaders/DIM3/composite5.vsh",
+   "source": "files/shaders__DIM3__composite5.vsh"
+  },
+  {
+   "file": "shaders/DIM3/composite6.fsh",
+   "source": "files/shaders__DIM3__composite6.fsh"
+  },
+  {
+   "file": "shaders/DIM3/composite6.vsh",
+   "source": "files/shaders__DIM3__composite6.vsh"
+  },
+  {
+   "file": "shaders/DIM3/composite7.fsh",
+   "source": "files/shaders__DIM3__composite7.fsh"
+  },
+  {
+   "file": "shaders/DIM3/composite7.vsh",
+   "source": "files/shaders__DIM3__composite7.vsh"
+  },
+  {
+   "file": "shaders/DIM3/composite8.fsh",
+   "source": "files/shaders__DIM3__composite8.fsh"
+  },
+  {
+   "file": "shaders/DIM3/composite8.vsh",
+   "source": "files/shaders__DIM3__composite8.vsh"
+  },
+  {
+   "file": "shaders/DIM3/composite9.fsh",
+   "source": "files/shaders__DIM3__composite9.fsh"
+  },
+  {
+   "file": "shaders/DIM3/composite9.vsh",
+   "source": "files/shaders__DIM3__composite9.vsh"
+  },
+  {
+   "file": "shaders/DIM3/deferred.csh",
+   "source": "files/shaders__DIM3__deferred.csh"
+  },
+  {
+   "file": "shaders/DIM3/deferred1.fsh",
+   "source": "files/shaders__DIM3__deferred1.fsh"
+  },
+  {
+   "file": "shaders/DIM3/deferred1.vsh",
+   "source": "files/shaders__DIM3__deferred1.vsh"
+  },
+  {
+   "file": "shaders/DIM3/deferred2.fsh",
+   "source": "files/shaders__DIM3__deferred2.fsh"
+  },
+  {
+   "file": "shaders/DIM3/deferred2.vsh",
+   "source": "files/shaders__DIM3__deferred2.vsh"
+  },
+  {
+   "file": "shaders/DIM3/dh_generic.fsh",
+   "source": "files/shaders__DIM3__dh_generic.fsh"
+  },
+  {
+   "file": "shaders/DIM3/dh_generic.vsh",
+   "source": "files/shaders__DIM3__dh_generic.vsh"
+  },
+  {
+   "file": "shaders/DIM3/dh_shadow.fsh",
+   "source": "files/shaders__DIM3__dh_shadow.fsh"
+  },
+  {
+   "file": "shaders/DIM3/dh_shadow.vsh",
+   "source": "files/shaders__DIM3__dh_shadow.vsh"
+  },
+  {
+   "file": "shaders/DIM3/dh_terrain.fsh",
+   "source": "files/shaders__DIM3__dh_terrain.fsh"
+  },
+  {
+   "file": "shaders/DIM3/dh_terrain.vsh",
+   "source": "files/shaders__DIM3__dh_terrain.vsh"
+  },
+  {
+   "file": "shaders/DIM3/dh_water.fsh",
+   "source": "files/shaders__DIM3__dh_water.fsh"
+  },
+  {
+   "file": "shaders/DIM3/dh_water.vsh",
+   "source": "files/shaders__DIM3__dh_water.vsh"
+  },
+  {
+   "file": "shaders/DIM3/final.fsh",
+   "source": "files/shaders__DIM3__final.fsh"
+  },
+  {
+   "file": "shaders/DIM3/final.vsh",
+   "source": "files/shaders__DIM3__final.vsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_armor_glint.fsh",
+   "source": "files/shaders__DIM3__gbuffers_armor_glint.fsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_armor_glint.vsh",
+   "source": "files/shaders__DIM3__gbuffers_armor_glint.vsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_basic.fsh",
+   "source": "files/shaders__DIM3__gbuffers_basic.fsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_basic.vsh",
+   "source": "files/shaders__DIM3__gbuffers_basic.vsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_beaconbeam.fsh",
+   "source": "files/shaders__DIM3__gbuffers_beaconbeam.fsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_beaconbeam.gsh",
+   "source": "files/shaders__DIM3__gbuffers_beaconbeam.gsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_beaconbeam.vsh",
+   "source": "files/shaders__DIM3__gbuffers_beaconbeam.vsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_block.fsh",
+   "source": "files/shaders__DIM3__gbuffers_block.fsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_block.vsh",
+   "source": "files/shaders__DIM3__gbuffers_block.vsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_block_translucent.fsh",
+   "source": "files/shaders__DIM3__gbuffers_block_translucent.fsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_block_translucent.vsh",
+   "source": "files/shaders__DIM3__gbuffers_block_translucent.vsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_damagedblock.fsh",
+   "source": "files/shaders__DIM3__gbuffers_damagedblock.fsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_damagedblock.vsh",
+   "source": "files/shaders__DIM3__gbuffers_damagedblock.vsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_entities.fsh",
+   "source": "files/shaders__DIM3__gbuffers_entities.fsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_entities.vsh",
+   "source": "files/shaders__DIM3__gbuffers_entities.vsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_entities_glowing.fsh",
+   "source": "files/shaders__DIM3__gbuffers_entities_glowing.fsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_entities_glowing.vsh",
+   "source": "files/shaders__DIM3__gbuffers_entities_glowing.vsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_entities_translucent.fsh",
+   "source": "files/shaders__DIM3__gbuffers_entities_translucent.fsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_entities_translucent.vsh",
+   "source": "files/shaders__DIM3__gbuffers_entities_translucent.vsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_hand.fsh",
+   "source": "files/shaders__DIM3__gbuffers_hand.fsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_hand.vsh",
+   "source": "files/shaders__DIM3__gbuffers_hand.vsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_hand_water.fsh",
+   "source": "files/shaders__DIM3__gbuffers_hand_water.fsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_hand_water.vsh",
+   "source": "files/shaders__DIM3__gbuffers_hand_water.vsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_lightning.fsh",
+   "source": "files/shaders__DIM3__gbuffers_lightning.fsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_lightning.vsh",
+   "source": "files/shaders__DIM3__gbuffers_lightning.vsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_particles.fsh",
+   "source": "files/shaders__DIM3__gbuffers_particles.fsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_particles.vsh",
+   "source": "files/shaders__DIM3__gbuffers_particles.vsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_particles_translucent.fsh",
+   "source": "files/shaders__DIM3__gbuffers_particles_translucent.fsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_particles_translucent.vsh",
+   "source": "files/shaders__DIM3__gbuffers_particles_translucent.vsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_skybasic.fsh",
+   "source": "files/shaders__DIM3__gbuffers_skybasic.fsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_skybasic.vsh",
+   "source": "files/shaders__DIM3__gbuffers_skybasic.vsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_skytextured.fsh",
+   "source": "files/shaders__DIM3__gbuffers_skytextured.fsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_skytextured.vsh",
+   "source": "files/shaders__DIM3__gbuffers_skytextured.vsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_spidereyes.fsh",
+   "source": "files/shaders__DIM3__gbuffers_spidereyes.fsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_spidereyes.vsh",
+   "source": "files/shaders__DIM3__gbuffers_spidereyes.vsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_terrain.fsh",
+   "source": "files/shaders__DIM3__gbuffers_terrain.fsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_terrain.gsh",
+   "source": "files/shaders__DIM3__gbuffers_terrain.gsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_terrain.tcs",
+   "source": "files/shaders__DIM3__gbuffers_terrain.tcs"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_terrain.tes",
+   "source": "files/shaders__DIM3__gbuffers_terrain.tes"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_terrain.vsh",
+   "source": "files/shaders__DIM3__gbuffers_terrain.vsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_terrain_cutout.fsh",
+   "source": "files/shaders__DIM3__gbuffers_terrain_cutout.fsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_terrain_cutout.vsh",
+   "source": "files/shaders__DIM3__gbuffers_terrain_cutout.vsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_textured.fsh",
+   "source": "files/shaders__DIM3__gbuffers_textured.fsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_textured.vsh",
+   "source": "files/shaders__DIM3__gbuffers_textured.vsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_textured_lit.fsh",
+   "source": "files/shaders__DIM3__gbuffers_textured_lit.fsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_textured_lit.vsh",
+   "source": "files/shaders__DIM3__gbuffers_textured_lit.vsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_voxels.fsh",
+   "source": "files/shaders__DIM3__gbuffers_voxels.fsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_voxels.vsh",
+   "source": "files/shaders__DIM3__gbuffers_voxels.vsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_water.fsh",
+   "source": "files/shaders__DIM3__gbuffers_water.fsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_water.vsh",
+   "source": "files/shaders__DIM3__gbuffers_water.vsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_weather.fsh",
+   "source": "files/shaders__DIM3__gbuffers_weather.fsh"
+  },
+  {
+   "file": "shaders/DIM3/gbuffers_weather.vsh",
+   "source": "files/shaders__DIM3__gbuffers_weather.vsh"
+  },
+  {
+   "file": "shaders/DIM3/physics_ocean.fsh",
+   "source": "files/shaders__DIM3__physics_ocean.fsh"
+  },
+  {
+   "file": "shaders/DIM3/physics_ocean.vsh",
+   "source": "files/shaders__DIM3__physics_ocean.vsh"
+  },
+  {
+   "file": "shaders/DIM3/physics_ocean_v2.fsh",
+   "source": "files/shaders__DIM3__physics_ocean_v2.fsh"
+  },
+  {
+   "file": "shaders/DIM3/physics_ocean_v2.vsh",
+   "source": "files/shaders__DIM3__physics_ocean_v2.vsh"
+  },
+  {
+   "file": "shaders/DIM3/prepare.csh",
+   "source": "files/shaders__DIM3__prepare.csh"
+  },
+  {
+   "file": "shaders/DIM3/prepare1.csh",
+   "source": "files/shaders__DIM3__prepare1.csh"
+  },
+  {
+   "file": "shaders/DIM3/prepare2.csh",
+   "source": "files/shaders__DIM3__prepare2.csh"
+  },
+  {
+   "file": "shaders/DIM3/prepare3.csh",
+   "source": "files/shaders__DIM3__prepare3.csh"
+  },
+  {
+   "file": "shaders/DIM3/prepare4.fsh",
+   "source": "files/shaders__DIM3__prepare4.fsh"
+  },
+  {
+   "file": "shaders/DIM3/prepare4.vsh",
+   "source": "files/shaders__DIM3__prepare4.vsh"
+  },
+  {
+   "file": "shaders/DIM3/setup.csh",
+   "source": "files/shaders__DIM3__setup.csh"
+  },
+  {
+   "file": "shaders/DIM3/shadow.fsh",
+   "source": "files/shaders__DIM3__shadow.fsh"
+  },
+  {
+   "file": "shaders/DIM3/shadow.vsh",
+   "source": "files/shaders__DIM3__shadow.vsh"
+  },
+  {
+   "file": "shaders/DIM3/shadow_entities.fsh",
+   "source": "files/shaders__DIM3__shadow_entities.fsh"
+  },
+  {
+   "file": "shaders/DIM3/shadow_entities.vsh",
+   "source": "files/shaders__DIM3__shadow_entities.vsh"
+  },
+  {
+   "file": "shaders/DIM3/shadow_voxels.fsh",
+   "source": "files/shaders__DIM3__shadow_voxels.fsh"
+  },
+  {
+   "file": "shaders/DIM3/shadow_voxels.vsh",
+   "source": "files/shaders__DIM3__shadow_voxels.vsh"
+  },
+  {
+   "file": "shaders/DIM3/voxy.json",
+   "source": "files/shaders__DIM3__voxy.json"
+  },
+  {
+   "file": "shaders/DIM3/voxy_opaque.glsl",
+   "source": "files/shaders__DIM3__voxy_opaque.glsl"
+  },
+  {
+   "file": "shaders/DIM3/voxy_translucent.glsl",
+   "source": "files/shaders__DIM3__voxy_translucent.glsl"
+  },
+  {
+   "file": "shaders/DIM800/begin.csh",
+   "source": "files/shaders__DIM800__begin.csh"
+  },
+  {
+   "file": "shaders/DIM800/clrwl_gbuffers.fsh",
+   "source": "files/shaders__DIM800__clrwl_gbuffers.fsh"
+  },
+  {
+   "file": "shaders/DIM800/clrwl_gbuffers.vsh",
+   "source": "files/shaders__DIM800__clrwl_gbuffers.vsh"
+  },
+  {
+   "file": "shaders/DIM800/clrwl_gbuffers_damagedblock.fsh",
+   "source": "files/shaders__DIM800__clrwl_gbuffers_damagedblock.fsh"
+  },
+  {
+   "file": "shaders/DIM800/clrwl_gbuffers_damagedblock.vsh",
+   "source": "files/shaders__DIM800__clrwl_gbuffers_damagedblock.vsh"
+  },
+  {
+   "file": "shaders/DIM800/clrwl_gbuffers_glint.fsh",
+   "source": "files/shaders__DIM800__clrwl_gbuffers_glint.fsh"
+  },
+  {
+   "file": "shaders/DIM800/clrwl_gbuffers_glint.vsh",
+   "source": "files/shaders__DIM800__clrwl_gbuffers_glint.vsh"
+  },
+  {
+   "file": "shaders/DIM800/clrwl_gbuffers_translucent.fsh",
+   "source": "files/shaders__DIM800__clrwl_gbuffers_translucent.fsh"
+  },
+  {
+   "file": "shaders/DIM800/clrwl_gbuffers_translucent.vsh",
+   "source": "files/shaders__DIM800__clrwl_gbuffers_translucent.vsh"
+  },
+  {
+   "file": "shaders/DIM800/clrwl_shadow.fsh",
+   "source": "files/shaders__DIM800__clrwl_shadow.fsh"
+  },
+  {
+   "file": "shaders/DIM800/clrwl_shadow.vsh",
+   "source": "files/shaders__DIM800__clrwl_shadow.vsh"
+  },
+  {
+   "file": "shaders/DIM800/composite.fsh",
+   "source": "files/shaders__DIM800__composite.fsh"
+  },
+  {
+   "file": "shaders/DIM800/composite.vsh",
+   "source": "files/shaders__DIM800__composite.vsh"
+  },
+  {
+   "file": "shaders/DIM800/composite1.fsh",
+   "source": "files/shaders__DIM800__composite1.fsh"
+  },
+  {
+   "file": "shaders/DIM800/composite1.vsh",
+   "source": "files/shaders__DIM800__composite1.vsh"
+  },
+  {
+   "file": "shaders/DIM800/composite10.fsh",
+   "source": "files/shaders__DIM800__composite10.fsh"
+  },
+  {
+   "file": "shaders/DIM800/composite10.vsh",
+   "source": "files/shaders__DIM800__composite10.vsh"
+  },
+  {
+   "file": "shaders/DIM800/composite11.fsh",
+   "source": "files/shaders__DIM800__composite11.fsh"
+  },
+  {
+   "file": "shaders/DIM800/composite11.vsh",
+   "source": "files/shaders__DIM800__composite11.vsh"
+  },
+  {
+   "file": "shaders/DIM800/composite12.fsh",
+   "source": "files/shaders__DIM800__composite12.fsh"
+  },
+  {
+   "file": "shaders/DIM800/composite12.vsh",
+   "source": "files/shaders__DIM800__composite12.vsh"
+  },
+  {
+   "file": "shaders/DIM800/composite2.fsh",
+   "source": "files/shaders__DIM800__composite2.fsh"
+  },
+  {
+   "file": "shaders/DIM800/composite2.vsh",
+   "source": "files/shaders__DIM800__composite2.vsh"
+  },
+  {
+   "file": "shaders/DIM800/composite20.csh",
+   "source": "files/shaders__DIM800__composite20.csh"
+  },
+  {
+   "file": "shaders/DIM800/composite3.fsh",
+   "source": "files/shaders__DIM800__composite3.fsh"
+  },
+  {
+   "file": "shaders/DIM800/composite3.vsh",
+   "source": "files/shaders__DIM800__composite3.vsh"
+  },
+  {
+   "file": "shaders/DIM800/composite4.fsh",
+   "source": "files/shaders__DIM800__composite4.fsh"
+  },
+  {
+   "file": "shaders/DIM800/composite4.vsh",
+   "source": "files/shaders__DIM800__composite4.vsh"
+  },
+  {
+   "file": "shaders/DIM800/composite5.fsh",
+   "source": "files/shaders__DIM800__composite5.fsh"
+  },
+  {
+   "file": "shaders/DIM800/composite5.vsh",
+   "source": "files/shaders__DIM800__composite5.vsh"
+  },
+  {
+   "file": "shaders/DIM800/composite6.fsh",
+   "source": "files/shaders__DIM800__composite6.fsh"
+  },
+  {
+   "file": "shaders/DIM800/composite6.vsh",
+   "source": "files/shaders__DIM800__composite6.vsh"
+  },
+  {
+   "file": "shaders/DIM800/composite7.fsh",
+   "source": "files/shaders__DIM800__composite7.fsh"
+  },
+  {
+   "file": "shaders/DIM800/composite7.vsh",
+   "source": "files/shaders__DIM800__composite7.vsh"
+  },
+  {
+   "file": "shaders/DIM800/composite8.fsh",
+   "source": "files/shaders__DIM800__composite8.fsh"
+  },
+  {
+   "file": "shaders/DIM800/composite8.vsh",
+   "source": "files/shaders__DIM800__composite8.vsh"
+  },
+  {
+   "file": "shaders/DIM800/composite9.fsh",
+   "source": "files/shaders__DIM800__composite9.fsh"
+  },
+  {
+   "file": "shaders/DIM800/composite9.vsh",
+   "source": "files/shaders__DIM800__composite9.vsh"
+  },
+  {
+   "file": "shaders/DIM800/deferred.csh",
+   "source": "files/shaders__DIM800__deferred.csh"
+  },
+  {
+   "file": "shaders/DIM800/deferred1.fsh",
+   "source": "files/shaders__DIM800__deferred1.fsh"
+  },
+  {
+   "file": "shaders/DIM800/deferred1.vsh",
+   "source": "files/shaders__DIM800__deferred1.vsh"
+  },
+  {
+   "file": "shaders/DIM800/deferred2.fsh",
+   "source": "files/shaders__DIM800__deferred2.fsh"
+  },
+  {
+   "file": "shaders/DIM800/deferred2.vsh",
+   "source": "files/shaders__DIM800__deferred2.vsh"
+  },
+  {
+   "file": "shaders/DIM800/dh_generic.fsh",
+   "source": "files/shaders__DIM800__dh_generic.fsh"
+  },
+  {
+   "file": "shaders/DIM800/dh_generic.vsh",
+   "source": "files/shaders__DIM800__dh_generic.vsh"
+  },
+  {
+   "file": "shaders/DIM800/dh_shadow.fsh",
+   "source": "files/shaders__DIM800__dh_shadow.fsh"
+  },
+  {
+   "file": "shaders/DIM800/dh_shadow.vsh",
+   "source": "files/shaders__DIM800__dh_shadow.vsh"
+  },
+  {
+   "file": "shaders/DIM800/dh_terrain.fsh",
+   "source": "files/shaders__DIM800__dh_terrain.fsh"
+  },
+  {
+   "file": "shaders/DIM800/dh_terrain.vsh",
+   "source": "files/shaders__DIM800__dh_terrain.vsh"
+  },
+  {
+   "file": "shaders/DIM800/dh_water.fsh",
+   "source": "files/shaders__DIM800__dh_water.fsh"
+  },
+  {
+   "file": "shaders/DIM800/dh_water.vsh",
+   "source": "files/shaders__DIM800__dh_water.vsh"
+  },
+  {
+   "file": "shaders/DIM800/final.fsh",
+   "source": "files/shaders__DIM800__final.fsh"
+  },
+  {
+   "file": "shaders/DIM800/final.vsh",
+   "source": "files/shaders__DIM800__final.vsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_armor_glint.fsh",
+   "source": "files/shaders__DIM800__gbuffers_armor_glint.fsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_armor_glint.vsh",
+   "source": "files/shaders__DIM800__gbuffers_armor_glint.vsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_basic.fsh",
+   "source": "files/shaders__DIM800__gbuffers_basic.fsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_basic.vsh",
+   "source": "files/shaders__DIM800__gbuffers_basic.vsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_beaconbeam.fsh",
+   "source": "files/shaders__DIM800__gbuffers_beaconbeam.fsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_beaconbeam.gsh",
+   "source": "files/shaders__DIM800__gbuffers_beaconbeam.gsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_beaconbeam.vsh",
+   "source": "files/shaders__DIM800__gbuffers_beaconbeam.vsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_block.fsh",
+   "source": "files/shaders__DIM800__gbuffers_block.fsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_block.vsh",
+   "source": "files/shaders__DIM800__gbuffers_block.vsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_block_translucent.fsh",
+   "source": "files/shaders__DIM800__gbuffers_block_translucent.fsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_block_translucent.vsh",
+   "source": "files/shaders__DIM800__gbuffers_block_translucent.vsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_damagedblock.fsh",
+   "source": "files/shaders__DIM800__gbuffers_damagedblock.fsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_damagedblock.vsh",
+   "source": "files/shaders__DIM800__gbuffers_damagedblock.vsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_entities.fsh",
+   "source": "files/shaders__DIM800__gbuffers_entities.fsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_entities.vsh",
+   "source": "files/shaders__DIM800__gbuffers_entities.vsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_entities_glowing.fsh",
+   "source": "files/shaders__DIM800__gbuffers_entities_glowing.fsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_entities_glowing.vsh",
+   "source": "files/shaders__DIM800__gbuffers_entities_glowing.vsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_entities_translucent.fsh",
+   "source": "files/shaders__DIM800__gbuffers_entities_translucent.fsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_entities_translucent.vsh",
+   "source": "files/shaders__DIM800__gbuffers_entities_translucent.vsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_hand.fsh",
+   "source": "files/shaders__DIM800__gbuffers_hand.fsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_hand.vsh",
+   "source": "files/shaders__DIM800__gbuffers_hand.vsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_hand_water.fsh",
+   "source": "files/shaders__DIM800__gbuffers_hand_water.fsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_hand_water.vsh",
+   "source": "files/shaders__DIM800__gbuffers_hand_water.vsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_lightning.fsh",
+   "source": "files/shaders__DIM800__gbuffers_lightning.fsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_lightning.vsh",
+   "source": "files/shaders__DIM800__gbuffers_lightning.vsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_particles.fsh",
+   "source": "files/shaders__DIM800__gbuffers_particles.fsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_particles.vsh",
+   "source": "files/shaders__DIM800__gbuffers_particles.vsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_particles_translucent.fsh",
+   "source": "files/shaders__DIM800__gbuffers_particles_translucent.fsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_particles_translucent.vsh",
+   "source": "files/shaders__DIM800__gbuffers_particles_translucent.vsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_skybasic.fsh",
+   "source": "files/shaders__DIM800__gbuffers_skybasic.fsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_skybasic.vsh",
+   "source": "files/shaders__DIM800__gbuffers_skybasic.vsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_skytextured.fsh",
+   "source": "files/shaders__DIM800__gbuffers_skytextured.fsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_skytextured.vsh",
+   "source": "files/shaders__DIM800__gbuffers_skytextured.vsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_spidereyes.fsh",
+   "source": "files/shaders__DIM800__gbuffers_spidereyes.fsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_spidereyes.vsh",
+   "source": "files/shaders__DIM800__gbuffers_spidereyes.vsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_terrain.fsh",
+   "source": "files/shaders__DIM800__gbuffers_terrain.fsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_terrain.gsh",
+   "source": "files/shaders__DIM800__gbuffers_terrain.gsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_terrain.tcs",
+   "source": "files/shaders__DIM800__gbuffers_terrain.tcs"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_terrain.tes",
+   "source": "files/shaders__DIM800__gbuffers_terrain.tes"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_terrain.vsh",
+   "source": "files/shaders__DIM800__gbuffers_terrain.vsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_terrain_cutout.fsh",
+   "source": "files/shaders__DIM800__gbuffers_terrain_cutout.fsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_terrain_cutout.vsh",
+   "source": "files/shaders__DIM800__gbuffers_terrain_cutout.vsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_textured.fsh",
+   "source": "files/shaders__DIM800__gbuffers_textured.fsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_textured.vsh",
+   "source": "files/shaders__DIM800__gbuffers_textured.vsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_textured_lit.fsh",
+   "source": "files/shaders__DIM800__gbuffers_textured_lit.fsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_textured_lit.vsh",
+   "source": "files/shaders__DIM800__gbuffers_textured_lit.vsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_voxels.fsh",
+   "source": "files/shaders__DIM800__gbuffers_voxels.fsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_voxels.vsh",
+   "source": "files/shaders__DIM800__gbuffers_voxels.vsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_water.fsh",
+   "source": "files/shaders__DIM800__gbuffers_water.fsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_water.vsh",
+   "source": "files/shaders__DIM800__gbuffers_water.vsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_weather.fsh",
+   "source": "files/shaders__DIM800__gbuffers_weather.fsh"
+  },
+  {
+   "file": "shaders/DIM800/gbuffers_weather.vsh",
+   "source": "files/shaders__DIM800__gbuffers_weather.vsh"
+  },
+  {
+   "file": "shaders/DIM800/physics_ocean.fsh",
+   "source": "files/shaders__DIM800__physics_ocean.fsh"
+  },
+  {
+   "file": "shaders/DIM800/physics_ocean.vsh",
+   "source": "files/shaders__DIM800__physics_ocean.vsh"
+  },
+  {
+   "file": "shaders/DIM800/physics_ocean_v2.fsh",
+   "source": "files/shaders__DIM800__physics_ocean_v2.fsh"
+  },
+  {
+   "file": "shaders/DIM800/physics_ocean_v2.vsh",
+   "source": "files/shaders__DIM800__physics_ocean_v2.vsh"
+  },
+  {
+   "file": "shaders/DIM800/prepare.csh",
+   "source": "files/shaders__DIM800__prepare.csh"
+  },
+  {
+   "file": "shaders/DIM800/prepare1.csh",
+   "source": "files/shaders__DIM800__prepare1.csh"
+  },
+  {
+   "file": "shaders/DIM800/prepare2.csh",
+   "source": "files/shaders__DIM800__prepare2.csh"
+  },
+  {
+   "file": "shaders/DIM800/prepare3.csh",
+   "source": "files/shaders__DIM800__prepare3.csh"
+  },
+  {
+   "file": "shaders/DIM800/prepare4.fsh",
+   "source": "files/shaders__DIM800__prepare4.fsh"
+  },
+  {
+   "file": "shaders/DIM800/prepare4.vsh",
+   "source": "files/shaders__DIM800__prepare4.vsh"
+  },
+  {
+   "file": "shaders/DIM800/setup.csh",
+   "source": "files/shaders__DIM800__setup.csh"
+  },
+  {
+   "file": "shaders/DIM800/shadow.fsh",
+   "source": "files/shaders__DIM800__shadow.fsh"
+  },
+  {
+   "file": "shaders/DIM800/shadow.vsh",
+   "source": "files/shaders__DIM800__shadow.vsh"
+  },
+  {
+   "file": "shaders/DIM800/shadow_entities.fsh",
+   "source": "files/shaders__DIM800__shadow_entities.fsh"
+  },
+  {
+   "file": "shaders/DIM800/shadow_entities.vsh",
+   "source": "files/shaders__DIM800__shadow_entities.vsh"
+  },
+  {
+   "file": "shaders/DIM800/shadow_voxels.fsh",
+   "source": "files/shaders__DIM800__shadow_voxels.fsh"
+  },
+  {
+   "file": "shaders/DIM800/shadow_voxels.vsh",
+   "source": "files/shaders__DIM800__shadow_voxels.vsh"
+  },
+  {
+   "file": "shaders/DIM800/voxy.json",
+   "source": "files/shaders__DIM800__voxy.json"
+  },
+  {
+   "file": "shaders/DIM800/voxy_opaque.glsl",
+   "source": "files/shaders__DIM800__voxy_opaque.glsl"
+  },
+  {
+   "file": "shaders/DIM800/voxy_translucent.glsl",
+   "source": "files/shaders__DIM800__voxy_translucent.glsl"
+  },
+  {
+   "file": "shaders/DIM802/begin.csh",
+   "source": "files/shaders__DIM802__begin.csh"
+  },
+  {
+   "file": "shaders/DIM802/clrwl_gbuffers.fsh",
+   "source": "files/shaders__DIM802__clrwl_gbuffers.fsh"
+  },
+  {
+   "file": "shaders/DIM802/clrwl_gbuffers.vsh",
+   "source": "files/shaders__DIM802__clrwl_gbuffers.vsh"
+  },
+  {
+   "file": "shaders/DIM802/clrwl_gbuffers_damagedblock.fsh",
+   "source": "files/shaders__DIM802__clrwl_gbuffers_damagedblock.fsh"
+  },
+  {
+   "file": "shaders/DIM802/clrwl_gbuffers_damagedblock.vsh",
+   "source": "files/shaders__DIM802__clrwl_gbuffers_damagedblock.vsh"
+  },
+  {
+   "file": "shaders/DIM802/clrwl_gbuffers_glint.fsh",
+   "source": "files/shaders__DIM802__clrwl_gbuffers_glint.fsh"
+  },
+  {
+   "file": "shaders/DIM802/clrwl_gbuffers_glint.vsh",
+   "source": "files/shaders__DIM802__clrwl_gbuffers_glint.vsh"
+  },
+  {
+   "file": "shaders/DIM802/clrwl_gbuffers_translucent.fsh",
+   "source": "files/shaders__DIM802__clrwl_gbuffers_translucent.fsh"
+  },
+  {
+   "file": "shaders/DIM802/clrwl_gbuffers_translucent.vsh",
+   "source": "files/shaders__DIM802__clrwl_gbuffers_translucent.vsh"
+  },
+  {
+   "file": "shaders/DIM802/clrwl_shadow.fsh",
+   "source": "files/shaders__DIM802__clrwl_shadow.fsh"
+  },
+  {
+   "file": "shaders/DIM802/clrwl_shadow.vsh",
+   "source": "files/shaders__DIM802__clrwl_shadow.vsh"
+  },
+  {
+   "file": "shaders/DIM802/composite.fsh",
+   "source": "files/shaders__DIM802__composite.fsh"
+  },
+  {
+   "file": "shaders/DIM802/composite.vsh",
+   "source": "files/shaders__DIM802__composite.vsh"
+  },
+  {
+   "file": "shaders/DIM802/composite1.fsh",
+   "source": "files/shaders__DIM802__composite1.fsh"
+  },
+  {
+   "file": "shaders/DIM802/composite1.vsh",
+   "source": "files/shaders__DIM802__composite1.vsh"
+  },
+  {
+   "file": "shaders/DIM802/composite10.fsh",
+   "source": "files/shaders__DIM802__composite10.fsh"
+  },
+  {
+   "file": "shaders/DIM802/composite10.vsh",
+   "source": "files/shaders__DIM802__composite10.vsh"
+  },
+  {
+   "file": "shaders/DIM802/composite11.fsh",
+   "source": "files/shaders__DIM802__composite11.fsh"
+  },
+  {
+   "file": "shaders/DIM802/composite11.vsh",
+   "source": "files/shaders__DIM802__composite11.vsh"
+  },
+  {
+   "file": "shaders/DIM802/composite12.fsh",
+   "source": "files/shaders__DIM802__composite12.fsh"
+  },
+  {
+   "file": "shaders/DIM802/composite12.vsh",
+   "source": "files/shaders__DIM802__composite12.vsh"
+  },
+  {
+   "file": "shaders/DIM802/composite2.fsh",
+   "source": "files/shaders__DIM802__composite2.fsh"
+  },
+  {
+   "file": "shaders/DIM802/composite2.vsh",
+   "source": "files/shaders__DIM802__composite2.vsh"
+  },
+  {
+   "file": "shaders/DIM802/composite20.csh",
+   "source": "files/shaders__DIM802__composite20.csh"
+  },
+  {
+   "file": "shaders/DIM802/composite3.fsh",
+   "source": "files/shaders__DIM802__composite3.fsh"
+  },
+  {
+   "file": "shaders/DIM802/composite3.vsh",
+   "source": "files/shaders__DIM802__composite3.vsh"
+  },
+  {
+   "file": "shaders/DIM802/composite4.fsh",
+   "source": "files/shaders__DIM802__composite4.fsh"
+  },
+  {
+   "file": "shaders/DIM802/composite4.vsh",
+   "source": "files/shaders__DIM802__composite4.vsh"
+  },
+  {
+   "file": "shaders/DIM802/composite5.fsh",
+   "source": "files/shaders__DIM802__composite5.fsh"
+  },
+  {
+   "file": "shaders/DIM802/composite5.vsh",
+   "source": "files/shaders__DIM802__composite5.vsh"
+  },
+  {
+   "file": "shaders/DIM802/composite6.fsh",
+   "source": "files/shaders__DIM802__composite6.fsh"
+  },
+  {
+   "file": "shaders/DIM802/composite6.vsh",
+   "source": "files/shaders__DIM802__composite6.vsh"
+  },
+  {
+   "file": "shaders/DIM802/composite7.fsh",
+   "source": "files/shaders__DIM802__composite7.fsh"
+  },
+  {
+   "file": "shaders/DIM802/composite7.vsh",
+   "source": "files/shaders__DIM802__composite7.vsh"
+  },
+  {
+   "file": "shaders/DIM802/composite8.fsh",
+   "source": "files/shaders__DIM802__composite8.fsh"
+  },
+  {
+   "file": "shaders/DIM802/composite8.vsh",
+   "source": "files/shaders__DIM802__composite8.vsh"
+  },
+  {
+   "file": "shaders/DIM802/composite9.fsh",
+   "source": "files/shaders__DIM802__composite9.fsh"
+  },
+  {
+   "file": "shaders/DIM802/composite9.vsh",
+   "source": "files/shaders__DIM802__composite9.vsh"
+  },
+  {
+   "file": "shaders/DIM802/deferred.csh",
+   "source": "files/shaders__DIM802__deferred.csh"
+  },
+  {
+   "file": "shaders/DIM802/deferred1.fsh",
+   "source": "files/shaders__DIM802__deferred1.fsh"
+  },
+  {
+   "file": "shaders/DIM802/deferred1.vsh",
+   "source": "files/shaders__DIM802__deferred1.vsh"
+  },
+  {
+   "file": "shaders/DIM802/deferred2.fsh",
+   "source": "files/shaders__DIM802__deferred2.fsh"
+  },
+  {
+   "file": "shaders/DIM802/deferred2.vsh",
+   "source": "files/shaders__DIM802__deferred2.vsh"
+  },
+  {
+   "file": "shaders/DIM802/dh_generic.fsh",
+   "source": "files/shaders__DIM802__dh_generic.fsh"
+  },
+  {
+   "file": "shaders/DIM802/dh_generic.vsh",
+   "source": "files/shaders__DIM802__dh_generic.vsh"
+  },
+  {
+   "file": "shaders/DIM802/dh_shadow.fsh",
+   "source": "files/shaders__DIM802__dh_shadow.fsh"
+  },
+  {
+   "file": "shaders/DIM802/dh_shadow.vsh",
+   "source": "files/shaders__DIM802__dh_shadow.vsh"
+  },
+  {
+   "file": "shaders/DIM802/dh_terrain.fsh",
+   "source": "files/shaders__DIM802__dh_terrain.fsh"
+  },
+  {
+   "file": "shaders/DIM802/dh_terrain.vsh",
+   "source": "files/shaders__DIM802__dh_terrain.vsh"
+  },
+  {
+   "file": "shaders/DIM802/dh_water.fsh",
+   "source": "files/shaders__DIM802__dh_water.fsh"
+  },
+  {
+   "file": "shaders/DIM802/dh_water.vsh",
+   "source": "files/shaders__DIM802__dh_water.vsh"
+  },
+  {
+   "file": "shaders/DIM802/final.fsh",
+   "source": "files/shaders__DIM802__final.fsh"
+  },
+  {
+   "file": "shaders/DIM802/final.vsh",
+   "source": "files/shaders__DIM802__final.vsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_armor_glint.fsh",
+   "source": "files/shaders__DIM802__gbuffers_armor_glint.fsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_armor_glint.vsh",
+   "source": "files/shaders__DIM802__gbuffers_armor_glint.vsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_basic.fsh",
+   "source": "files/shaders__DIM802__gbuffers_basic.fsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_basic.vsh",
+   "source": "files/shaders__DIM802__gbuffers_basic.vsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_beaconbeam.fsh",
+   "source": "files/shaders__DIM802__gbuffers_beaconbeam.fsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_beaconbeam.gsh",
+   "source": "files/shaders__DIM802__gbuffers_beaconbeam.gsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_beaconbeam.vsh",
+   "source": "files/shaders__DIM802__gbuffers_beaconbeam.vsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_block.fsh",
+   "source": "files/shaders__DIM802__gbuffers_block.fsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_block.vsh",
+   "source": "files/shaders__DIM802__gbuffers_block.vsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_block_translucent.fsh",
+   "source": "files/shaders__DIM802__gbuffers_block_translucent.fsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_block_translucent.vsh",
+   "source": "files/shaders__DIM802__gbuffers_block_translucent.vsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_damagedblock.fsh",
+   "source": "files/shaders__DIM802__gbuffers_damagedblock.fsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_damagedblock.vsh",
+   "source": "files/shaders__DIM802__gbuffers_damagedblock.vsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_entities.fsh",
+   "source": "files/shaders__DIM802__gbuffers_entities.fsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_entities.vsh",
+   "source": "files/shaders__DIM802__gbuffers_entities.vsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_entities_glowing.fsh",
+   "source": "files/shaders__DIM802__gbuffers_entities_glowing.fsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_entities_glowing.vsh",
+   "source": "files/shaders__DIM802__gbuffers_entities_glowing.vsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_entities_translucent.fsh",
+   "source": "files/shaders__DIM802__gbuffers_entities_translucent.fsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_entities_translucent.vsh",
+   "source": "files/shaders__DIM802__gbuffers_entities_translucent.vsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_hand.fsh",
+   "source": "files/shaders__DIM802__gbuffers_hand.fsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_hand.vsh",
+   "source": "files/shaders__DIM802__gbuffers_hand.vsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_hand_water.fsh",
+   "source": "files/shaders__DIM802__gbuffers_hand_water.fsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_hand_water.vsh",
+   "source": "files/shaders__DIM802__gbuffers_hand_water.vsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_lightning.fsh",
+   "source": "files/shaders__DIM802__gbuffers_lightning.fsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_lightning.vsh",
+   "source": "files/shaders__DIM802__gbuffers_lightning.vsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_particles.fsh",
+   "source": "files/shaders__DIM802__gbuffers_particles.fsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_particles.vsh",
+   "source": "files/shaders__DIM802__gbuffers_particles.vsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_particles_translucent.fsh",
+   "source": "files/shaders__DIM802__gbuffers_particles_translucent.fsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_particles_translucent.vsh",
+   "source": "files/shaders__DIM802__gbuffers_particles_translucent.vsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_skybasic.fsh",
+   "source": "files/shaders__DIM802__gbuffers_skybasic.fsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_skybasic.vsh",
+   "source": "files/shaders__DIM802__gbuffers_skybasic.vsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_skytextured.fsh",
+   "source": "files/shaders__DIM802__gbuffers_skytextured.fsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_skytextured.vsh",
+   "source": "files/shaders__DIM802__gbuffers_skytextured.vsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_spidereyes.fsh",
+   "source": "files/shaders__DIM802__gbuffers_spidereyes.fsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_spidereyes.vsh",
+   "source": "files/shaders__DIM802__gbuffers_spidereyes.vsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_terrain.fsh",
+   "source": "files/shaders__DIM802__gbuffers_terrain.fsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_terrain.gsh",
+   "source": "files/shaders__DIM802__gbuffers_terrain.gsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_terrain.tcs",
+   "source": "files/shaders__DIM802__gbuffers_terrain.tcs"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_terrain.tes",
+   "source": "files/shaders__DIM802__gbuffers_terrain.tes"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_terrain.vsh",
+   "source": "files/shaders__DIM802__gbuffers_terrain.vsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_terrain_cutout.fsh",
+   "source": "files/shaders__DIM802__gbuffers_terrain_cutout.fsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_terrain_cutout.vsh",
+   "source": "files/shaders__DIM802__gbuffers_terrain_cutout.vsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_textured.fsh",
+   "source": "files/shaders__DIM802__gbuffers_textured.fsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_textured.vsh",
+   "source": "files/shaders__DIM802__gbuffers_textured.vsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_textured_lit.fsh",
+   "source": "files/shaders__DIM802__gbuffers_textured_lit.fsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_textured_lit.vsh",
+   "source": "files/shaders__DIM802__gbuffers_textured_lit.vsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_voxels.fsh",
+   "source": "files/shaders__DIM802__gbuffers_voxels.fsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_voxels.vsh",
+   "source": "files/shaders__DIM802__gbuffers_voxels.vsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_water.fsh",
+   "source": "files/shaders__DIM802__gbuffers_water.fsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_water.vsh",
+   "source": "files/shaders__DIM802__gbuffers_water.vsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_weather.fsh",
+   "source": "files/shaders__DIM802__gbuffers_weather.fsh"
+  },
+  {
+   "file": "shaders/DIM802/gbuffers_weather.vsh",
+   "source": "files/shaders__DIM802__gbuffers_weather.vsh"
+  },
+  {
+   "file": "shaders/DIM802/physics_ocean.fsh",
+   "source": "files/shaders__DIM802__physics_ocean.fsh"
+  },
+  {
+   "file": "shaders/DIM802/physics_ocean.vsh",
+   "source": "files/shaders__DIM802__physics_ocean.vsh"
+  },
+  {
+   "file": "shaders/DIM802/physics_ocean_v2.fsh",
+   "source": "files/shaders__DIM802__physics_ocean_v2.fsh"
+  },
+  {
+   "file": "shaders/DIM802/physics_ocean_v2.vsh",
+   "source": "files/shaders__DIM802__physics_ocean_v2.vsh"
+  },
+  {
+   "file": "shaders/DIM802/prepare.csh",
+   "source": "files/shaders__DIM802__prepare.csh"
+  },
+  {
+   "file": "shaders/DIM802/prepare1.csh",
+   "source": "files/shaders__DIM802__prepare1.csh"
+  },
+  {
+   "file": "shaders/DIM802/prepare2.csh",
+   "source": "files/shaders__DIM802__prepare2.csh"
+  },
+  {
+   "file": "shaders/DIM802/prepare3.csh",
+   "source": "files/shaders__DIM802__prepare3.csh"
+  },
+  {
+   "file": "shaders/DIM802/prepare4.fsh",
+   "source": "files/shaders__DIM802__prepare4.fsh"
+  },
+  {
+   "file": "shaders/DIM802/prepare4.vsh",
+   "source": "files/shaders__DIM802__prepare4.vsh"
+  },
+  {
+   "file": "shaders/DIM802/setup.csh",
+   "source": "files/shaders__DIM802__setup.csh"
+  },
+  {
+   "file": "shaders/DIM802/shadow.fsh",
+   "source": "files/shaders__DIM802__shadow.fsh"
+  },
+  {
+   "file": "shaders/DIM802/shadow.vsh",
+   "source": "files/shaders__DIM802__shadow.vsh"
+  },
+  {
+   "file": "shaders/DIM802/shadow_entities.fsh",
+   "source": "files/shaders__DIM802__shadow_entities.fsh"
+  },
+  {
+   "file": "shaders/DIM802/shadow_entities.vsh",
+   "source": "files/shaders__DIM802__shadow_entities.vsh"
+  },
+  {
+   "file": "shaders/DIM802/shadow_voxels.fsh",
+   "source": "files/shaders__DIM802__shadow_voxels.fsh"
+  },
+  {
+   "file": "shaders/DIM802/shadow_voxels.vsh",
+   "source": "files/shaders__DIM802__shadow_voxels.vsh"
+  },
+  {
+   "file": "shaders/DIM802/voxy.json",
+   "source": "files/shaders__DIM802__voxy.json"
+  },
+  {
+   "file": "shaders/DIM802/voxy_opaque.glsl",
+   "source": "files/shaders__DIM802__voxy_opaque.glsl"
+  },
+  {
+   "file": "shaders/DIM802/voxy_translucent.glsl",
+   "source": "files/shaders__DIM802__voxy_translucent.glsl"
+  }
+ ]
+}
