@@ -17,9 +17,18 @@ apply plugin: 'net.minecraftforge.gradle.forge'
 //   set JAVA_HOME=C:\Program Files\Zulu\zulu-8
 //   %USERPROFILE%\.gradle\wrapper\dists\gradle-4.10.3-bin\<hash>\gradle-4.10.3\bin\gradle.bat build
 
-// 0.1.6 release build: the plain release number, the same way 0.1.5 was cut. The development
-// counter lives on main between releases; this commit and its tag carry the release itself.
-version = '0.1.6'
+// Development line after the 0.1.6 release: every rebuild is suspicious-speculars-0.1.7pre-<n>.
+// The base is bumped by hand when a runtime release is cut; the counter restarts whenever it changes.
+def baseFile = file('build.base')
+def buildNumberFile = file('build.number')
+String buildBase = '0.1.7pre'
+if (!baseFile.exists() || baseFile.text.trim() != buildBase) {
+    baseFile.text = buildBase
+    buildNumberFile.text = '0'
+}
+int nextBuild = (buildNumberFile.exists() ? buildNumberFile.text.trim().toInteger() : 0) + 1
+
+version = "${buildBase}-${nextBuild}"
 group = 'suspiciousspeculars'
 archivesBaseName = 'suspicious-speculars'
 

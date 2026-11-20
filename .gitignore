@@ -28,3 +28,5 @@ __pycache__/
 patcher/data/
 patcher/data-bundle.zip
 patcher/data-bundle.version
+# written by the version block in mod/build.gradle
+mod/build.base
