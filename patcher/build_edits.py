@@ -1,22 +1,29 @@
 """Build the declarative patch that turns a stock Eclipse e89e6c6 into ours.
 
-Each edited file carries the SHA-256 of its stock content, so the applier can prove it is
-looking at exactly the build the patch was made for and refuse anything else. Whole files
-that are our own data are shipped verbatim; the four per-dimension folders are small stubs
-we generate, so they are shipped as added files rather than derived at apply time.
+The patch must not carry Eclipse's code. Their pack is not redistributed here, so nothing built
+from stock is shipped verbatim: a stock file we modify is stored as line edits (only our lines are
+written into patch.txt), and a stock file we need under another name - the per-dimension shadow
+shaders are the case - is stored as COPY plus line edits, with the applier taking the bytes from the
+player's own Eclipse archive. What ships is our own additions and our own changed lines, never a copy
+of their file.
+
+Each edit or copy carries the SHA-256 of its stock content, so the applier proves it is looking at
+exactly the build the patch was made for and refuses anything else. Files whose bytes differ from
+stock only in line endings produce no diff and are omitted entirely.
 
 Run, with the shader workspace's two archives:
 
     py build_edits.py --base <stock eclipse-e89e6c6.zip> --ours <our repacked zip>
 
 The defaults come from the SUSY_ECLIPSE_BASE / SUSY_ECLIPSE_OURS environment variables; both refer
-to the private shader workspace, which is why the generated `data\` is committed here.
+to the private shader workspace, which is why the generated `data\` is committed to the installer.
 """
 import argparse
 import difflib
 import hashlib
 import json
 import os
+import shutil
 import zipfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -25,14 +32,9 @@ OUR_ZIP = os.environ.get("SUSY_ECLIPSE_OURS", "")
 OUT_DIR = os.path.join(HERE, "data")
 FILES_DIR = os.path.join(OUT_DIR, "files")
 
-FORCE_WHOLE = {
-    "shaders/block.properties",
-    "shaders/dimension.properties",
-    "shaders/colorwheel.properties",
-    "shaders/entity.properties",
-    "shaders/item.properties",
-    "shaders/ph_lights.json",
-}
+# A file we add that is this close to a stock file is treated as that file plus our changes.
+COPY_MIN_RATIO = 0.90
+COPY_MIN_LINES = 10
 
 
 def read_zip(path):
@@ -51,8 +53,38 @@ def norm(raw):
 
 
 def is_text(name):
-    return name.endswith((".fsh", ".vsh", ".gsh", ".tcs", ".tes", ".csh", ".glsl",
-                           ".properties", ".json", ".lang", ".txt", ".md"))
+    return (name.endswith((".fsh", ".vsh", ".gsh", ".tcs", ".tes", ".csh", ".glsl",
+                            ".properties", ".json", ".lang", ".txt", ".md", ".mcmeta",
+                            ".bat", ".cmd", ".sh", ".toml", ".cfg"))
+            or name.endswith(".gitignore"))
+
+
+def ops_between(a, b):
+    """Line ops that turn a into b; only the inserted (our) lines are stored."""
+    ops = []
+    sm = difflib.SequenceMatcher(None, a, b, autojunk=False)
+    for tag, i1, i2, j1, j2 in sm.get_opcodes():
+        if tag == "equal":
+            continue
+        ops.append({"line": i1, "delete": i2 - i1, "insert": b[j1:j2]})
+    return ops
+
+
+def sha_lines(lines):
+    return hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()
+
+
+def closest(name, lines, base_lines):
+    """The stock file this addition is a near copy of, or None."""
+    best = None
+    slack = max(6, len(lines) // 8)
+    for stock, stock_lines in base_lines.items():
+        if abs(len(stock_lines) - len(lines)) > slack:
+            continue
+        ratio = difflib.SequenceMatcher(None, stock_lines, lines, autojunk=False).ratio()
+        if ratio >= COPY_MIN_RATIO and (best is None or ratio > best[1]):
+            best = (stock, ratio, stock_lines)
+    return best
 
 
 def build():
@@ -62,50 +94,56 @@ def build():
             "or set SUSY_ECLIPSE_BASE and SUSY_ECLIPSE_OURS")
     base = read_zip(BASE_ZIP)
     ours = read_zip(OUR_ZIP)
-    edits, replace_files, add_files = [], [], []
+    edits, copy_files, add_files = [], [], []
+
+    base_lines = {n: norm(raw).split("\n") for n, raw in base.items() if is_text(n)}
 
     for name in sorted(ours):
         if name not in base:
+            if is_text(name):
+                b = norm(ours[name]).split("\n")
+                if len(b) >= COPY_MIN_LINES:
+                    hit = closest(name, b, base_lines)
+                    if hit is not None:
+                        stock, _ratio, a = hit
+                        copy_files.append({
+                            "file": name,
+                            "from": stock,
+                            "sha256": sha_lines(a),
+                            "ops": ops_between(a, b),
+                        })
+                        continue
             add_files.append({"file": name, "source": None})
             continue
         if not is_text(name):
             if base[name] != ours[name]:
-                replace_files.append({"file": name, "source": None})
+                # Binary stock content is never shipped; that would redistribute their art.
+                raise SystemExit("binary file differs from stock and cannot be expressed as edits: %s"
+                                 % name)
             continue
         a = norm(base[name]).split("\n")
         b = norm(ours[name]).split("\n")
         if a == b:
             continue
-        if name in FORCE_WHOLE:
-            replace_files.append({"file": name, "source": None})
-            continue
-        ops = []
-        sm = difflib.SequenceMatcher(None, a, b, autojunk=False)
-        for tag, i1, i2, j1, j2 in sm.get_opcodes():
-            if tag == "equal":
-                continue
-            ops.append({"line": i1, "delete": i2 - i1, "insert": b[j1:j2]})
-        edits.append({
-            "file": name,
-            "sha256": hashlib.sha256("\n".join(a).encode("utf-8")).hexdigest(),
-            "ops": ops,
-        })
+        edits.append({"file": name, "sha256": sha_lines(a), "ops": ops_between(a, b)})
 
+    # Start clean: a file that is stock verbatim this run must not survive from an older one.
+    shutil.rmtree(FILES_DIR, ignore_errors=True)
     os.makedirs(FILES_DIR, exist_ok=True)
-    for entry in replace_files + add_files:
+    for entry in add_files:
         safe = entry["file"].replace("/", "__")
         entry["source"] = "files/" + safe
         with open(os.path.join(OUT_DIR, entry["source"]), "wb") as fh:
             fh.write(ours[entry["file"]])
 
     doc = {
-        "schema": 3,
+        "schema": 4,
         "base": {
             "name": "Eclipse e89e6c6",
             "detect": {"file": "shaders/lang/en_us.lang", "contains": "ECLIPSE"},
         },
         "edits": edits,
-        "replace_files": replace_files,
+        "copy_files": copy_files,
         "add_files": add_files,
     }
     with open(os.path.join(OUT_DIR, "edits.json"), "w", encoding="utf-8") as fh:
@@ -113,27 +151,35 @@ def build():
 
     # Java-friendly mirror of the same data: line based so the pre-launch tool needs no JSON
     # parser. Format:
-    #   PATCH 1
+    #   PATCH 2
     #   DETECT <file> <marker>
     #   EDIT <path> <sha256> <ops>
+    #   COPY <dest> <stock path> <sha256> <ops>     (dest built from the stock file, then the ops)
     #   OP <line> <delete> <insertlines> \n +<line> ...
-    #   WHOLE <path> <source file>   /  ADD <path> <source file>
+    #   ADD <path> <source file>
+    def write_ops(fh, ops):
+        for op in ops:
+            fh.write("OP %d %d %d\n" % (op["line"], op["delete"], len(op["insert"])))
+            for line in op["insert"]:
+                fh.write("+" + line + "\n")
+
     with open(os.path.join(OUT_DIR, "patch.txt"), "w", encoding="utf-8", newline="\n") as fh:
-        fh.write("PATCH 1\n")
+        fh.write("PATCH 2\n")
         fh.write("DETECT %s %s\n" % (doc["base"]["detect"]["file"], doc["base"]["detect"]["contains"]))
         for e in doc["edits"]:
             fh.write("EDIT %s %s %d\n" % (e["file"], e["sha256"], len(e["ops"])))
-            for op in e["ops"]:
-                fh.write("OP %d %d %d\n" % (op["line"], op["delete"], len(op["insert"])))
-                for line in op["insert"]:
-                    fh.write("+" + line + "\n")
-        for r in doc["replace_files"]:
-            fh.write("WHOLE %s %s\n" % (r["file"], r["source"]))
+            write_ops(fh, e["ops"])
+        for e in doc["copy_files"]:
+            fh.write("COPY %s %s %s %d\n"
+                     % (e["file"], e["from"], e["sha256"], len(e["ops"])))
+            write_ops(fh, e["ops"])
         for r in doc["add_files"]:
             fh.write("ADD %s %s\n" % (r["file"], r["source"]))
 
     print("files edited:", len(edits), "line ops:", sum(len(e["ops"]) for e in edits))
-    print("replaced:", len(replace_files), " added:", len(add_files))
+    print("copied from stock:", len(copy_files),
+          "ops:", sum(len(e["ops"]) for e in copy_files))
+    print("added:", len(add_files))
 
 
 if __name__ == "__main__":

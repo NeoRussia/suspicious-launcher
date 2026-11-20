@@ -1,3 +1,0 @@
-# name<TAB>sha256<TAB>url
-Suspicious Speculars - Eclipse Addon.zip	19b4ba795bcbc973dbd2fb78f50328e4c651159fe600be7060feffc761bed8df	http://127.0.0.1:8731/Suspicious%20Speculars%20-%20Eclipse%20Addon.zip
-Suspicious Speculars.zip	e488bfa50b6e7f41c4685896d40ea25003819a540d1a130ce39336e360549534	http://127.0.0.1:8731/Suspicious%20Speculars.zip

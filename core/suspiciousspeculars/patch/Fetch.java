@@ -61,6 +61,14 @@ public final class Fetch {
      * as {@link #download} and a hard size cap so a wrong URL cannot stream a video into the heap.
      */
     public static byte[] read(String url, int maxBytes) throws IOException {
+        return read(url, maxBytes, 8000);
+    }
+
+    /**
+     * Same, with a caller-chosen timeout. A launch path checks a small manifest before the game does
+     * anything, so it cannot afford to sit on a dead connection as long as a pack download can.
+     */
+    public static byte[] read(String url, int maxBytes, int timeoutMs) throws IOException {
         if (url.startsWith("file:") || !url.contains("://")) {
             Path source = url.startsWith("file:")
                     ? java.nio.file.Paths.get(java.net.URI.create(url))
@@ -71,8 +79,8 @@ public final class Fetch {
             return all;
         }
         HttpURLConnection c = (HttpURLConnection) new URL(url).openConnection();
-        c.setConnectTimeout(8000);
-        c.setReadTimeout(8000);
+        c.setConnectTimeout(timeoutMs);
+        c.setReadTimeout(timeoutMs);
         c.setInstanceFollowRedirects(true);
         c.setRequestProperty("User-Agent", "suspicious-speculars");
         try {

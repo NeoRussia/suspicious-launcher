@@ -14,9 +14,10 @@ also known as "SUSY Shader Option".
 and drop it into `mods\`. Requirements and behaviour are below; the window itself states anything that is
 missing before it installs.
 
-It is not the resource packs and not the shader. The packs are fetched at install time from
-[NeoRussia/suspicious-speculars](https://github.com/NeoRussia/suspicious-speculars), and the shader base
-is fetched from its own author. Nothing of theirs is redistributed here.
+It is not the resource packs and not the shader. Both the packs and the shader patch are published in
+[NeoRussia/suspicious-speculars](https://github.com/NeoRussia/suspicious-speculars) and fetched from
+there; the shader base is fetched from its own author. Nothing of theirs is redistributed here, and a
+shader change reaches an installed game without a release of this jar.
 
 ## Screenshots
 
@@ -56,6 +57,9 @@ Afterwards:
 - **A pack release is offered, not applied behind your back.** The coremod compares the published
   `packs.txt` version with the installed one; when a newer release exists the window names it —
   `update 2026-11-19.1 available` — with an **Update** button, and Continue relaunches into it.
+- **A shader change arrives the same way.** The patch definition is published beside the packs as
+  `patch\patch.txt`; each start compares its identity with what is installed, and a newer patch is
+  written on the next install or update, so the shader is never rebuilt mid-session.
 - **A changed shader patch rebuilds the shader.** If the shader on disk was written by an older
   installer, it is patched again on the launch after an update, so a release's material fixes arrive
   without deleting anything. A window opened by hand closes without starting anything; one the mod
@@ -118,12 +122,17 @@ by hand. Pack updates are separate and are offered in game as above. Notes for e
   `logs\suspicious-speculars-launcher.log`.
 - **A red line naming OptiFine or Nothirium** — remove that jar; Demonica cannot work beside either.
 - **A second shader pack in `shaderpacks\`** — reported as a conflict rather than picked for you.
-- **Offline** — the installer falls back to the manifest bundled in the jar, so a fresh install still
-  works; only host-only pack releases wait for a connection.
+- **Offline** — the installer falls back to the pack manifest and the patch data bundled in the jar, so
+  a fresh install still works; only host-only pack or shader releases wait for a connection.
 - **Check at start-up turned off** — nothing is checked, repaired or rebuilt at launch;
   `/suspiciousspeculars install` is the way back.
 - **No progress bar for the Eclipse download** — the band reports what was fetched once it finishes, and
   the transcript has the rest.
+- **A file added to `config\suspicious-speculars\patch\` disappears** — a fetched patch replaces that
+  directory as a whole, so nothing added inside it survives an update. Overrides belong outside the
+  data: `patch.url` beside it (patch manifest) or `manifest.url` inside it (pack manifest, preserved
+  across a swap), or the `suspiciousspeculars.patchUrl` / `suspiciousspeculars.manifestUrl` system
+  properties.
 
 To reset an instance to a first install, delete the paths listed under [What it writes into an
 instance](#what-it-writes-into-an-instance) and leave the mod jar in `mods\`.
@@ -133,14 +142,21 @@ instance](#what-it-writes-into-an-instance) and leave the mod jar in `mods\`.
 The launcher jar is embedded in the mod jar, so the order matters and `dist\` must be populated first:
 
 ```powershell
-# 1. the window (Java 8; set JAVA8_HOME, or Zulu 8 is found at C:\Program Files\Zulu\zulu-8)
+# 0. the patch data, from the shader workspace (build_edits.py) — also publishes patch\ and packs.txt
+py patcher\bundle.py
+
+# 1. the window and the CLI (Java 8; set JAVA8_HOME, or Zulu 8 is found at C:\Program Files\Zulu\zulu-8)
 powershell -NoProfile -ExecutionPolicy Bypass -File launcher\build.ps1 -NoDiff
+powershell -NoProfile -ExecutionPolicy Bypass -File prelauncher\build.ps1
 
 # 2. the mod (ForgeGradle 2.3 needs Gradle 4.10.3 and JAVA_HOME=Zulu 8, not 25)
 $env:JAVA_HOME = "C:\Program Files\Zulu\zulu-8"
 gradle build --offline
 # -> mod\build\libs\suspicious-speculars-<version>.jar
 ```
+
+All three front ends compile `core\`: rebuild the window and the CLI whenever the patcher changes,
+or an old copy applies patches with rules it does not understand.
 
 The build number in `mod\build.number` advances on every successful jar build; a release build carries the
 plain version instead (`0.1.5`).
@@ -149,9 +165,16 @@ plain version instead (`0.1.5`).
 workspace beside this tree (`Work\launcher\harness`, not in this repository) and prints
 `no harness beside this repo` when it is absent.
 
-`patcher\data\` — the patch definition, the replacement files and the SUSY option seed — is generated from
-the shader workspace and committed here as a build product. Regenerating it needs that workspace, not this
-repository.
+`patcher\data\` — the patch definition, our added files and the SUSY option seed — is generated
+from the shader workspace by `build_edits.py` and packed by `bundle.py`. It is not committed here: the
+same bundle is published to `suspicious-speculars` under `patch\`, which is what a running install
+reads, and the copy inside the jar is only the offline fallback. Regenerating it needs that workspace,
+not this repository.
+
+The patch carries **none of Eclipse's code**. A stock file we modify is stored as line edits, of which
+only the inserted lines are written; a stock file we need under another name (the per-dimension shadow
+shaders) is stored as `COPY` plus edits, and the applier takes the bytes from the player's own Eclipse
+archive. What ships here is our own lines and our own files.
 
 ## Layout
 
@@ -161,10 +184,10 @@ repository.
 | `mod\src\main\java\suspiciousspeculars\` | the Forge mod and the `FMLCorePlugin` hand-over |
 | `launcher\src\` | the Swing window: drawing, font, state machine |
 | `launcher\ui\` | the window's art, font sheet and sound cue, packaged into the jar |
-| `patcher\data\` | `patch.txt`, replacement files, `packs.txt` fallback, `susy-options.txt` |
-| `patcher\build_edits.py`, `bundle.py` | regenerate and pack that data; `data-bundle.zip` is what the mod carries |
-| `prelauncher\` | command-line front end, for a launcher pre-launch command |
-| `test\run-scenarios.ps1` | 59 checks of the patcher against throwaway instances, no game needed |
+| `patcher\data\` | generated by `build_edits.py`, not committed: `patch.txt`, replacement files, `susy-options.txt` |
+| `patcher\build_edits.py`, `bundle.py` | regenerate that data, pack it, and publish `patch\` + `packs.txt` to the shader repository |
+| `prelauncher\` | command-line front end and `build.ps1`, for a launcher pre-launch command |
+| `test\run-scenarios.ps1` | 79 checks of the patcher against throwaway instances, no game needed |
 | `dist\`, `mod\build\` | build output (not committed) |
 
 ## What it writes into an instance
@@ -172,7 +195,7 @@ repository.
 | Path | |
 |---|---|
 | `config\suspicious-speculars.properties` | state: status, hashes, versions, the last message |
-| `config\suspicious-speculars\` | unpacked launcher jar and patch data |
+| `config\suspicious-speculars\` | unpacked launcher jar, patch data and its `.bundle-version` marker |
 | `config\shaders.properties` | the shader selection |
 | `shaderpacks\Eclipse-*.zip`, `Eclipse-SUSY.zip.txt` | fetched base, patched shader, saved options |
 | `resourcepacks\Suspicious Speculars*.zip` | the two packs |
@@ -189,7 +212,12 @@ powershell -NoProfile -ExecutionPolicy Bypass -File test\run-scenarios.ps1
 It builds nothing: it exercises the patcher's CLI (committed as `prelauncher\suspicious-speculars-pre.jar`)
 against fresh instances — install, dormancy, pack update, missing and corrupt packs, base selection,
 dependency states, a failed write, incompatible mods, the hand-over decision, the button labels, the
-patch-data repatch and the launch hand-back — and prints PASS/FAIL per check.
+patch-data repatch and the launch hand-back — and runs the mod's patch-data unpacking against a
+stand-in repository (a newer patch, a second start that must do nothing, an offline start that must keep
+what it has, the launch check being off, one built for another Eclipse commit, one needing a newer patch
+format, and an unreachable host), and the early coremod unpack (repository data survives it, bundled data
+is replaced without merging) —
+and prints PASS/FAIL per check.
 
 It is the development suite, not a self-contained one: it expects the shader project at `..\..\shader`
 (the base zip and the decoy under `workspace\`, the pack host clone in `host\`), a Prism instance carrying

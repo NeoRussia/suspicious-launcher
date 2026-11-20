@@ -153,7 +153,7 @@ public final class SuspiciousSpeculars {
         }
 
         try {
-            ModData.ensure(dataDir, log);
+            ModData.ensure(dataDir, log, checkOnLaunch());
         } catch (IOException e) {
             log.error("could not unpack the patch data", e);
             lastStatus = Patcher.ERROR;

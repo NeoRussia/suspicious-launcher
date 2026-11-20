@@ -13,6 +13,7 @@ import java.io.InputStream;
 import java.io.Writer;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
@@ -51,6 +52,8 @@ public final class SuspiciousCorePlugin implements IFMLLoadingPlugin {
 
     private static final String BUNDLE = "assets/suspiciousspeculars/patch-bundle.zip";
     private static final String BUNDLE_VERSION = "assets/suspiciousspeculars/patch-bundle.version";
+    /** Where the data came from: "bundled" may be replaced by a newer jar, "repository" may not. */
+    private static final String SOURCE = ".bundle-source";
     private static final String LAUNCHER = "assets/suspiciousspeculars/launcher.jar";
     private static final String LAUNCHER_VERSION = "assets/suspiciousspeculars/launcher.version";
     private static final String ATTEMPTED = "relaunchAttempted";
@@ -252,13 +255,24 @@ public final class SuspiciousCorePlugin implements IFMLLoadingPlugin {
             String want = text(readEntry(self, BUNDLE_VERSION)).trim();
             if (want.isEmpty()) return;
             Path marker = dataDir.toPath().resolve(".bundle-version");
-            if (Files.isRegularFile(marker)
-                    && want.equals(new String(Files.readAllBytes(marker), StandardCharsets.UTF_8).trim())) {
-                return;
-            }
+            Path source = dataDir.toPath().resolve(SOURCE);
+            String have = Files.isRegularFile(marker)
+                    ? new String(Files.readAllBytes(marker), StandardCharsets.UTF_8).trim() : "";
+            if (want.equals(have)) return;
+
+            // Data the mod fetched from the shader repository can be newer than this jar. Overwriting
+            // it here would undo the update on every launch, before the mod gets a chance to run, so
+            // the early half only ever writes the bundled copy over bundled data (or over nothing).
+            String from = Files.isRegularFile(source)
+                    ? new String(Files.readAllBytes(source), StandardCharsets.UTF_8).trim() : "";
+            if ("repository".equals(from)) return;
+
             byte[] bundle = readEntry(self, BUNDLE);
             if (bundle == null) return;
 
+            // Replace, do not merge: files from an older bundle (whole stock files, mostly) would
+            // otherwise survive beside the new ones and never be used again.
+            deleteTree(dataDir.toPath());
             Files.createDirectories(dataDir.toPath());
             int files = 0;
             ZipInputStream zis = new ZipInputStream(new ByteArrayInputStream(bundle));
@@ -279,10 +293,25 @@ public final class SuspiciousCorePlugin implements IFMLLoadingPlugin {
                 zis.close();
             }
             Files.write(marker, want.getBytes(StandardCharsets.UTF_8));
+            Files.write(source, "bundled".getBytes(StandardCharsets.UTF_8));
             log.info("unpacked " + files + " patch files before the game started");
         } catch (Throwable t) {
             log.warn("patch data unpack failed; pre-init will retry: " + t);
         }
+    }
+
+    /** Recursive delete for the data directory; before mods load, nothing else has it open. */
+    private static void deleteTree(Path path) throws IOException {
+        if (!Files.exists(path)) return;
+        if (Files.isDirectory(path)) {
+            DirectoryStream<Path> stream = Files.newDirectoryStream(path);
+            try {
+                for (Path child : stream) deleteTree(child);
+            } finally {
+                stream.close();
+            }
+        }
+        Files.deleteIfExists(path);
     }
 
     /** The patch data marker written by {@link #ensureData}, or empty when it is not there. */

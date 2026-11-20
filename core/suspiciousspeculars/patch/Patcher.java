@@ -1276,11 +1276,18 @@ public final class Patcher {
             final String path;
             final String sha;
             final List<Op> ops;
+            /** When set, the file is built by copying this stock file and applying the ops. */
+            final String from;
 
             Edit(String path, String sha, List<Op> ops) {
+                this(path, sha, ops, null);
+            }
+
+            Edit(String path, String sha, List<Op> ops, String from) {
                 this.path = path;
                 this.sha = sha;
                 this.ops = ops;
+                this.from = from;
             }
         }
 
@@ -1312,6 +1319,25 @@ public final class Patcher {
                         ops.add(new Op(line, del, body));
                     }
                     p.edits.add(new Edit(path, sha, ops));
+                } else if (f[0].equals("COPY")) {
+                    // A file Eclipse already has, under a name of ours: the patch stores only the
+                    // difference and the stock name, never a copy of their code.
+                    String[] c = lines.get(i - 1).split(" ");
+                    String dest = c[1];
+                    String src = c[2];
+                    String sha = c[3];
+                    int count = Integer.parseInt(c[4]);
+                    List<Op> ops = new ArrayList<Op>();
+                    for (int k = 0; k < count; k++) {
+                        String[] o = lines.get(i++).split(" ");
+                        int line = Integer.parseInt(o[1]);
+                        int del = Integer.parseInt(o[2]);
+                        int ins = Integer.parseInt(o[3]);
+                        List<String> body = new ArrayList<String>();
+                        for (int j = 0; j < ins; j++) body.add(lines.get(i++).substring(1));
+                        ops.add(new Op(line, del, body));
+                    }
+                    p.edits.add(new Edit(dest, sha, ops, src));
                 } else if (f[0].equals("WHOLE")) {
                     p.whole.add(new Pair(f[1], f[2]));
                 } else if (f[0].equals("ADD")) {
@@ -1331,20 +1357,21 @@ public final class Patcher {
             LinkedHashMap<String, byte[]> files = readZip(baseZip);
 
             for (Edit e : edits) {
-                byte[] raw = files.get(e.path);
+                String source = e.from == null ? e.path : e.from;
+                byte[] raw = files.get(source);
                 if (raw == null) {
-                    owner.say("missing " + e.path);
+                    owner.say("missing " + source);
                     return -1;
                 }
                 List<String> lines = new ArrayList<String>(Arrays.asList(norm(raw).split("\n", -1)));
                 if (!sha256(lines).equals(e.sha)) {
-                    owner.say("hash mismatch " + e.path);
+                    owner.say("hash mismatch " + source);
                     return -1;
                 }
                 for (int k = e.ops.size() - 1; k >= 0; k--) {
                     Op op = e.ops.get(k);
                     if (op.line > lines.size()) {
-                        owner.say("line out of range " + e.path);
+                        owner.say("line out of range " + source);
                         return -1;
                     }
                     int to = Math.min(lines.size(), op.line + op.delete);
@@ -1389,10 +1416,11 @@ public final class Patcher {
         String check(Path baseZip) throws IOException {
             LinkedHashMap<String, byte[]> files = readZip(baseZip);
             for (Edit e : edits) {
-                byte[] raw = files.get(e.path);
-                if (raw == null) return "missing " + e.path;
+                String source = e.from == null ? e.path : e.from;
+                byte[] raw = files.get(source);
+                if (raw == null) return "missing " + source;
                 List<String> lines = Arrays.asList(norm(raw).split("\n", -1));
-                if (!sha256(lines).equals(e.sha)) return "different " + e.path;
+                if (!sha256(lines).equals(e.sha)) return "different " + source;
             }
             return null;
         }

@@ -82,24 +82,25 @@ def main():
                          % (doc["base"]["name"], detect["file"], detect["contains"]))
 
     failed = []
-    for e in doc["edits"]:
-        raw = files.get(e["file"])
+    for e in doc["edits"] + doc.get("copy_files", []):
+        source = e.get("from", e["file"])
+        raw = files.get(source)
         if raw is None:
-            failed.append((e["file"], "missing"))
+            failed.append((source, "missing"))
             continue
         lines = norm(raw).split("\n")
         digest = hashlib.sha256("\n".join(lines).encode("utf-8")).hexdigest()
         if digest != e["sha256"]:
-            failed.append((e["file"], "base hash differs"))
+            failed.append((source, "base hash differs"))
             continue
-        files[e["file"]] = "\n".join(apply_ops(lines, e["ops"], e["file"])).encode("utf-8")
+        files[e["file"]] = "\n".join(apply_ops(lines, e["ops"], source)).encode("utf-8")
 
     if failed:
         for name, why in failed:
             print("refused:", name, "-", why)
         raise SystemExit("base does not match %s; nothing written" % doc["base"]["name"])
 
-    for r in doc["replace_files"]:
+    for r in doc.get("replace_files", []):
         files[r["file"]] = open(os.path.join(args.data, r["source"]), "rb").read()
     for r in doc.get("add_files", []):
         files[r["file"]] = open(os.path.join(args.data, r["source"]), "rb").read()
@@ -112,8 +113,8 @@ def main():
     with zipfile.ZipFile(args.out, "w", zipfile.ZIP_DEFLATED) as z:
         for name in sorted(files):
             z.writestr(name, files[name])
-    print("patched: %d edited, %d replaced, %d derived -> %s"
-          % (len(doc["edits"]), len(doc["replace_files"]), derived, args.out))
+    print("patched: %d edited, %d copied, %d added -> %s"
+          % (len(doc["edits"]), len(doc.get("copy_files", [])), derived, args.out))
 
     if args.verify:
         ref = read_zip(args.verify)

@@ -17,13 +17,19 @@ apply plugin: 'net.minecraftforge.gradle.forge'
 //   set JAVA_HOME=C:\Program Files\Zulu\zulu-8
 //   %USERPROFILE%\.gradle\wrapper\dists\gradle-4.10.3-bin\<hash>\gradle-4.10.3\bin\gradle.bat build
 
-// 0.1.5 is a release: the jar is suspicious-speculars-0.1.5.jar and the @Mod version is the
-// same string. Development builds after it go back to the "<next>pre-<n>" form (bump the base by
-// hand here, and mod\build.number tells one pre build from another).
+// Development line after the 0.1.5 release: every rebuild is suspicious-speculars-0.1.6pre-<n>. The
+// base is bumped by hand when a runtime release is cut; the counter restarts at 1 whenever the base
+// changes, so the numbers belong to their line instead of continuing an older one.
+def baseFile = file('build.base')
 def buildNumberFile = file('build.number')
+String buildBase = '0.1.6pre'
+if (!baseFile.exists() || baseFile.text.trim() != buildBase) {
+    baseFile.text = buildBase
+    buildNumberFile.text = '0'
+}
 int nextBuild = (buildNumberFile.exists() ? buildNumberFile.text.trim().toInteger() : 0) + 1
 
-version = '0.1.5'
+version = "${buildBase}-${nextBuild}"
 group = 'suspiciousspeculars'
 archivesBaseName = 'suspicious-speculars'
 
@@ -56,6 +62,12 @@ dependencies {
 
 // The patch data (patcher/data, 500 files) travels as one bundle, built by patcher/bundle.py
 task copyBundle(type: Copy) {
+    doFirst {
+        // The data is generated now, not committed: say what to run instead of failing on a missing file.
+        if (!file('../patcher/data-bundle.zip').exists() || !file('../patcher/data-bundle.version').exists()) {
+            throw new GradleException('patch data missing - run "py patcher\\bundle.py" in the installer tree first')
+        }
+    }
     from('../patcher') {
         include 'data-bundle.zip'
         include 'data-bundle.version'

@@ -122,7 +122,9 @@ New-Instance $inst
 $out = Run $inst $manifest
 $st = StateOf $inst
 Check "fresh install reports installed" ($st['status'] -eq 'installed') $st['status']
-Check "fresh install patched 22 files" ($out -match 'patched 22 files')
+# the count is whatever the patch data says: EDIT and COPY entries both write a file
+$patchCount = (Select-String -Path (Join-Path $data "patch.txt") -Pattern '^(EDIT|COPY) ' | Measure-Object).Count
+Check "fresh install patched $patchCount files" ($out -match "patched $patchCount files")
 Check "shader written" (Test-Path "$inst\shaderpacks\Eclipse-SUSY.zip")
 Check "both packs installed" ((Get-ChildItem "$inst\resourcepacks" -File | Measure-Object).Count -eq 2)
 Check "both packs enabled in options.txt" ((Get-Content "$inst\options.txt" -Raw) -match 'Suspicious Speculars - Eclipse Addon.zip' -and (Get-Content "$inst\options.txt" -Raw) -match '"Suspicious Speculars.zip"')
@@ -360,6 +362,121 @@ if (Test-Path $launcherJar) {
     Check "no launcher, no relaunch attempt" ($hb[5] -eq "false") (($hb -join " / "))
 } else {
     "  SKIP  window button labels (no launcher jar)"
+}
+
+# 20. patch data: the shader repository decides what is current, the jar is only the fallback
+if ($modJar -and $toolchain) {
+    $probeDir = Join-Path $Work "patchprobe"
+    Remove-Item $probeDir -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Force -Path $probeDir | Out-Null
+    & $javac -cp "$($modJar.FullName);$log4j" -d $probeDir (Join-Path $Root "test\PatchDataProbe.java") 2>&1 | Out-Null
+
+    $jarVersion = (Get-Content (Join-Path $Root "patcher\data-bundle.version")).Trim()
+    $eclipse = ([regex]'COMMIT\s*=\s*"([0-9a-f]+)"').Match(
+        (Get-Content (Join-Path $Root "core\suspiciousspeculars\patch\EclipseFetch.java") -Raw)).Groups[1].Value
+    $missingUrl = (New-Object System.Uri((Join-Path $Work "no-such-repo\patch.txt"))).AbsoluteUri
+
+    function New-PatchRepo($dir, $base, [int]$requires = 1) {
+        Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue
+        New-Item -ItemType Directory -Force -Path "$dir\patch" | Out-Null
+        & py -c "import sys, zipfile; z = zipfile.ZipFile(sys.argv[1], 'w'); z.writestr('patch.txt', 'probe\n'); z.writestr('sentinel.txt', 'yes\n'); z.close()" "$dir\patch\bundle.zip"
+        $sha = (Get-FileHash "$dir\patch\bundle.zip" -Algorithm SHA256).Hash.ToLower()
+        @("MANIFEST`t1", "REQUIRES`t$requires", "VERSION`t$sha 2", "BASE`t$base",
+          "PATCH`tbundle.zip`t$sha`tbundle.zip") |
+            Set-Content -Path "$dir\patch\patch.txt" -Encoding ascii
+        return (New-Object System.Uri("$dir\patch\patch.txt")).AbsoluteUri
+    }
+
+    function Invoke-PatchProbe($dir, $url, [switch]$Keep, [switch]$Off) {
+        if (-not $Keep) { Remove-Item $dir -Recurse -Force -ErrorAction SilentlyContinue }
+        $probeArgs = @($dir)
+        if ($Off) { $probeArgs += "off" }
+        # java writes the log4j "no core" notice to stderr; with Stop that would abort the run
+        $previous = $ErrorActionPreference
+        $ErrorActionPreference = "Continue"
+        try {
+            $raw = & $java "-Dsuspiciousspeculars.patchUrl=$url" `
+                -cp "$($modJar.FullName);$log4j;$probeDir" suspiciousspeculars.PatchDataProbe @probeArgs 2>&1 | Out-String
+        } finally {
+            $ErrorActionPreference = $previous
+        }
+        $fields = @{ raw = $raw }
+        foreach ($line in $raw -split "`r?`n") {
+            if ($line -match '^(\w+)=(.*)$') { $fields[$Matches[1]] = $Matches[2].Trim() }
+        }
+        return $fields
+    }
+
+    $remoteUrl = New-PatchRepo (Join-Path $Work "patchrepo") $eclipse
+    $remoteVersion = ((Get-Content (Join-Path $Work "patchrepo\patch\patch.txt") |
+        Where-Object { $_ -like 'VERSION*' }) -split "`t")[1]
+
+    $probeData = Join-Path $Work "patchdata-remote"
+    $got = Invoke-PatchProbe $probeData $remoteUrl
+    Check "a repository patch replaces the bundled one" ($got['marker'] -eq $remoteVersion) $got['marker']
+    Check "its files are the ones on disk" ($got['sentinel'] -eq 'True') "sentinel=$($got['sentinel'])"
+    Check "the download is consumed, not left behind" ($got['download'] -eq 'False')
+    $again = Invoke-PatchProbe $probeData $remoteUrl -Keep
+    Check "a second start downloads nothing" (($again['marker'] -eq $remoteVersion) -and ($again['download'] -eq 'False'))
+    Check "a second start rewrites nothing" ($again['stamp'] -eq $got['stamp']) ("$($got['stamp']) -> $($again['stamp'])")
+    $offline = Invoke-PatchProbe $probeData $missingUrl -Keep
+    Check "an offline start keeps the newer patch" ($offline['marker'] -eq $remoteVersion) $offline['marker']
+    Check "an offline start rewrites nothing" ($offline['stamp'] -eq $got['stamp'])
+    $off = Invoke-PatchProbe $probeData $remoteUrl -Keep -Off
+    Check "launch check off touches neither network nor data" `
+        (($off['marker'] -eq $remoteVersion) -and ($off['stamp'] -eq $got['stamp'])) $off['marker']
+
+    $wrongUrl = New-PatchRepo (Join-Path $Work "patchrepo-wrongbase") "deadbee"
+    $wrong = Invoke-PatchProbe (Join-Path $Work "patchdata-wrongbase") $wrongUrl
+    Check "a patch for another Eclipse commit is refused" ($wrong['marker'] -eq $jarVersion) $wrong['marker']
+    Check "the bundled data is used instead" ($wrong['sentinel'] -eq 'False')
+
+    $futureUrl = New-PatchRepo (Join-Path $Work "patchrepo-format") $eclipse -Requires 99
+    $future = Invoke-PatchProbe (Join-Path $Work "patchdata-format") $futureUrl
+    Check "a patch needing a newer format is refused" ($future['marker'] -eq $jarVersion) $future['marker']
+    Check "the bundled data is used for it too" ($future['sentinel'] -eq 'False')
+
+    $missing = Invoke-PatchProbe (Join-Path $Work "patchdata-missing") $missingUrl
+    Check "an unreachable repository falls back to the jar" ($missing['marker'] -eq $jarVersion) $missing['marker']
+    Check "and unpacks the bundled data" ($missing['patch'] -eq 'True' -and $missing['sentinel'] -eq 'False')
+
+    Remove-Item $probeDir -Recurse -Force -ErrorAction SilentlyContinue
+} else {
+    "  SKIP  patch data from the repository (no built jar or toolchain)"
+}
+
+# 21. the early half must not undo a repository patch, and must replace rather than merge
+if ($modJar -and $toolchain) {
+    $coreProbe = Join-Path $Work "coreprobe"
+    Remove-Item $coreProbe -Recurse -Force -ErrorAction SilentlyContinue
+    New-Item -ItemType Directory -Force -Path $coreProbe | Out-Null
+    & $javac -cp "$($modJar.FullName);$log4j;$forgeBin" -d $coreProbe (Join-Path $Root "test\CoreDataProbe.java") 2>&1 | Out-Null
+
+    $coreData = Join-Path $Work "coredata"
+    Remove-Item $coreData -Recurse -Force -ErrorAction SilentlyContinue
+    $previous = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $raw = & $java -cp "$($modJar.FullName);$log4j;$forgeBin;$coreProbe" `
+            suspiciousspeculars.CoreDataProbe $coreData $modJar.FullName 2>&1 | Out-String
+    } finally {
+        $ErrorActionPreference = $previous
+    }
+    $fields = @{}
+    foreach ($line in $raw -split "`r?`n") {
+        if ($line -match '^(\w+)=(.*)$') { $fields[$Matches[1]] = $Matches[2].Trim() }
+    }
+    $jarBundle = (Get-Content (Join-Path $Root "patcher\data-bundle.version")).Trim()
+    Check "a repository patch survives the early unpack" ($fields['marker1'] -eq "remote-version 999") $fields['marker1']
+    Check "and keeps its provenance" ($fields['source1'] -eq "repository") $fields['source1']
+    Check "and its files are left alone" ($fields['keep1'] -eq 'True') "keep=$($fields['keep1'])"
+    Check "bundled data is replaced by the jar" ($fields['marker2'] -eq $jarBundle) $fields['marker2']
+    Check "and records itself as bundled" ($fields['source2'] -eq "bundled") $fields['source2']
+    Check "and the old directory is not merged" ($fields['keep2'] -eq 'False') "keep=$($fields['keep2'])"
+
+    Remove-Item $coreProbe -Recurse -Force -ErrorAction SilentlyContinue
+} else {
+    "  SKIP  early unpack rules (no built jar or toolchain)"
 }
 
 ""
